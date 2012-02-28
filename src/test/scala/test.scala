@@ -134,7 +134,46 @@ class Test1 extends FunSuite
         // This should not run the function body
         notrunner( inc() )
         assert( a === 2 )
+    }
+    
+    
+    test( "Blocks as arguments" )
+    {
+        import resource._
         
+        for ( file1 <- managed( new java.io.FileOutputStream( "boo1.txt" ) );
+              file2 <- managed( new java.io.FileOutputStream( "boo1.txt" ) ) )
+        {
+            //file1.write( "hello".toByteArray )
+            //file2.write( "world".toByteArray )
+        }
+        
+        /*trait Cleanupable
+        {
+            def cleanup() : Unit
+        }
+        
+        class Wrapper( var value : String )
+        
+        class Tester( val fileName : String ) extends Cleanupable
+        {
+            val file = new java.io.File(fileName)
+            
+            def cleanup() = { file.close() }
+        }
+        
+        def withCleanup[T <: Cleanupable]( cp : T )( block : T => Unit )
+        {
+            block( cp )
+            cp.cleanup()
+        }
+        
+        withCleanup( new FileCloseable( "test.txt" ) )
+        {
+            theFile =>
+            
+            print( theFile )
+        }*/
     }
 }
 

@@ -15,7 +15,8 @@ object ScalatestBuild extends Build
             name                := "Scalatest",
             libraryDependencies ++= Seq(
                 "org.scalatest" % "scalatest_2.9.1" % "1.6.1",
-                "org.scalaz" % "scalaz-full_2.9.1" % "6.0.4"
+                "org.scalaz" % "scalaz-full_2.9.1" % "6.0.4",
+                "com.github.jsuereth.scala-arm" % "scala-arm_2.9.1" % "1.0"
             )
         )
     )
