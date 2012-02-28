@@ -35,5 +35,62 @@ class Test1 extends FunSuite
         
         assert( extracted === "woot" )
     }
+    
+    test("Function application infix")
+    {
+        assert( (List(4, 5, 6) map { _ * 2 }) === List(8, 10, 12) )
+    }
+    
+    test( "Parallel container stuff" )
+    {
+        val a = (0 until 10000).par.reduce( _ + _ )
+        assert( a === 49995000 )
+    }
+    
+    test( "Named arguments" )
+    {
+        object Foo
+        {
+            def a( first : Int, second : Int ) = first / second
+        }
+        
+        
+        assert( Foo.a( first=12, second=2 ) === 6 )
+        assert( Foo.a( second=2, first=12 ) === 6 )
+    }
+    
+    test( "Cake pattern" )
+    {
+        trait Foo1
+        {
+            self : Foo1 with Foo2 with Foo3 =>
+            
+            def one = 1
+            def sum1 = one + two + three
+        }
+        
+        trait Foo2
+        {
+            self : Foo2 with Foo1 with Foo3 =>
+            
+            def two = 2
+            def sum2 = one + two + three
+        }
+        
+        trait Foo3
+        {
+            self : Foo3 with Foo1 with Foo2 =>
+            
+            def three = 3
+            def sum3 = one + two + three
+        }
+        
+        object Cake extends Foo1 with Foo2 with Foo3
+        {
+            assert( sum1 === 6 )
+            assert( sum2 === 6 )
+            assert( sum3 === 6 )
+        }
+    }
 }
 
