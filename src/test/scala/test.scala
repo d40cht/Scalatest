@@ -106,5 +106,35 @@ class Test1 extends FunSuite
         a = 13
         assert( t1 === 25 )
     }
+    
+    test( "Curried functions" )
+    {
+        def blah( a : Int )( b : Int ) = a + b
+        
+        assert( blah(1)(2) === 3 )
+        
+        assert( (blah {4} {5} ) === 9 )
+    }
+    
+    test( "Code blocks as function arguments" )
+    {
+        def runner( fn : => Unit ) = fn
+        def notrunner( fn : => Unit ) = Unit
+        
+        var a = 0
+        
+        def inc() = { a += 1 }
+        
+        assert( a === 0 )
+        inc()
+        assert( a === 1 )
+        runner( inc() )
+        assert( a === 2 )
+        
+        // This should not run the function body
+        notrunner( inc() )
+        assert( a === 2 )
+        
+    }
 }
 
