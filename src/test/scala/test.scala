@@ -92,5 +92,19 @@ class Test1 extends FunSuite
             assert( sum3 === 6 )
         }
     }
+    
+    test( "Closures and their references" )
+    {
+        var a = 12
+        var b = 12
+        
+        def t1 = a + b
+        
+        assert( t1 === 24 )
+        
+        // Closures take references to the external objects, not copies thereof
+        a = 13
+        assert( t1 === 25 )
+    }
 }
 
