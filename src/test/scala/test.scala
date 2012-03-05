@@ -136,6 +136,99 @@ class Test1 extends FunSuite
         assert( a === 2 )
     }
     
+    test( "Partial functions" )
+    {
+        val a = List(1,2,3,4,5,6,7,8,9,10,11,12,13,14)
+        
+        val b = (a collect { case v if v >= 12 => v * v }).sum
+        
+        assert( b === (12*12) + (13*13) + (14*14) )
+        
+
+        // Passing a partial function to map will fail at runtime if not defined on the input
+        intercept[scala.MatchError]( a map { case v if v >= 12 => v * v } )
+    }
+    
+    test( "Maps etc" )
+    {
+        val b = Map(
+            1 -> '1',
+            2 -> '2',
+            3 -> '3' )
+        val c = List( (1, '1'), (2, '2'), (3, '3') )
+        
+        assert( b === c.toMap )
+        
+        val v = List( 1, 2, 3, 1, 2, 3, 1, 2, 3 )
+        assert( v.toSet.size === 3 )
+        
+        assert( v.grouped(3).toList startsWith List( List( 1, 2, 3 ), List( 1, 2, 3 ) ) )
+        assert( v.sliding(3).toList startsWith List( List( 1, 2, 3 ), List( 2, 3, 1 ), List( 3, 1, 2 ) ) )
+        
+        val q = List( 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 )
+        assert( q containsSlice List( 4, 5, 6 ) )
+        
+        
+        assert( v.distinct.toList sameElements List( 1, 2, 3 ) )
+    }
+    
+    test( "Buffers" )
+    {
+        // TODO
+    }
+    
+    test( "Sets" )
+    {
+        val a = scala.collection.immutable.SortedSet( 1, 2, 3, 4, 5, 6 )
+        val b = scala.collection.immutable.SortedSet( 4, 5, 6, 7, 8, 9, 10 )
+        
+        assert( Set( 3, 4 ) subsetOf a )
+        assert( !(a subsetOf b) )
+        
+        assert( (a intersect b) sameElements List (4, 5, 6) )
+        
+        // Note diff is not symmetric
+        assert( (a diff b) sameElements List( 1, 2, 3 ) )
+        assert( (b diff a) sameElements List( 7, 8, 9, 10 ) )
+        
+        def symDiff[T]( a : scala.collection.immutable.SortedSet[T], b : scala.collection.immutable.SortedSet[T] ) = (a diff b) union (b diff a)
+        
+        assert( symDiff(a, b) sameElements List( 1, 2, 3, 7, 8, 9, 10 ) )
+        
+        // As above, but with implicit conversion magic
+        {
+            class SymdiffableSet[T]( val contents : scala.collection.immutable.SortedSet[T] )
+            {
+                def symDiff( other : SymdiffableSet[T] ) = new SymdiffableSet( (contents diff other.contents) union (other.contents diff contents) )
+            }
+            
+            object convs
+            {
+                implicit def setToSymdiffableSet[T]( set : scala.collection.immutable.SortedSet[T] ) = new SymdiffableSet( set )
+                implicit def symdiffableSetToSet[T]( sdset : SymdiffableSet[T] ) = sdset.contents
+            }
+            
+            import convs._
+            
+            assert( (a symDiff b) sameElements List( 1, 2, 3, 7, 8, 9, 10 ) )
+        }
+        
+        assert( !((a - 4) contains 4) )
+        assert( (a + 12) contains 12 )
+        
+        val q = scala.collection.BitSet( 1, 5, 6 )
+        assert( q.contains( 5 ) )
+    }
+    
+    test( "Collection munging" )
+    {
+        val a = List(1,2,3,4,5,6,7,8,9,10,11,12,13,14)
+        
+        val slice1 = a.takeWhile( _ < 13 ).dropWhile( _ > 5 )
+        
+        val b = a.view.map( x => x*x ).map( y => y + y )
+    }
+    
     
     test( "Blocks as arguments" )
     {
