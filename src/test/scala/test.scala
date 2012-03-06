@@ -1,5 +1,7 @@
 import org.scalatest.FunSuite
 
+import scala.collection.mutable.{ListBuffer}
+
 class Test1 extends FunSuite
 {
     test("Structural typing")
@@ -218,6 +220,61 @@ class Test1 extends FunSuite
         
         val q = scala.collection.BitSet( 1, 5, 6 )
         assert( q.contains( 5 ) )
+    }
+    
+    test( "Varargs" )
+    {   
+        def makeList[T]( args : T* ) =
+        {
+            val l = new ListBuffer[T]()
+            for (arg <- args )
+            {
+                l.append( arg )
+            }
+            
+            l.toList
+        }
+        
+        assert( makeList( 1, 2, 3, 4, 5 ) sameElements List( 1, 2, 3, 4, 5 ) )
+    }
+    
+    test( "Infinite streams with lazy construction" )
+    {
+    
+        def factorials() = 
+        {
+            // Not stream concatenation operator, akin to :: but with lazy eval
+            def rec( curr : Int, index : Int ) : Stream[Int] = curr #:: rec( curr*index, index + 1 )
+            
+            rec( 1, 1 )
+        }
+        
+        assert( factorials.take(10) sameElements List(1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880) )
+    }
+    
+    test( "Queues" )
+    {
+        var q = scala.collection.immutable.Queue[Int]()
+        
+        q = q.enqueue( 1 )
+        q = q.enqueue( 2 )
+        q = q.enqueue( 3 )
+        
+        assert( q.length === 3 )
+        
+        q += 4
+        assert( q.length == 4 )
+        
+        val( element1, newq1 ) = q.dequeue
+        assert( element1 === 1 )
+        
+        val( element2, newq2 ) = newq1.dequeue
+        assert( element2 === 2 )
+        
+        val( element3, newq3 ) = newq2.dequeue
+        assert( element3 === 3 )
+        
+        assert( newq3.length === 1 )
     }
     
     test( "Collection munging" )
