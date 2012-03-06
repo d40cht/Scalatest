@@ -238,6 +238,42 @@ class Test1 extends FunSuite
         assert( makeList( 1, 2, 3, 4, 5 ) sameElements List( 1, 2, 3, 4, 5 ) )
     }
     
+    test( "For comprehensions and the option monad" )
+    {
+        val a = Some( "Hello" )
+        val b = Some( "World" )
+        val c = Some( "Crash" )
+        val d = Some( "Boom" )
+        val n = None
+        
+        var enteredLoop = false
+        for
+        (
+            am <- a;
+            bm <- b;
+            cm <- c;
+            dm <- d
+        )
+        {
+            enteredLoop = true
+        }
+        assert( enteredLoop )
+        
+        enteredLoop = false
+        for
+        (
+            am <- a;
+            bm <- n;
+            cm <- c;
+            dm <- d
+        )
+        {
+            enteredLoop = true
+        }
+        
+        assert( !enteredLoop )
+    }
+    
     test( "Infinite streams with lazy construction" )
     {
     
@@ -285,12 +321,10 @@ class Test1 extends FunSuite
         
         val els2 = Array( 4, 5, 6, 7 )
         val v = els2.view.slice( 1, 3 )
-        println( v.toList )
         assert( v sameElements List( 5, 6 ) )
         
         els2(1) = 12
         
-        println( v.toList )
         assert( v sameElements List( 12, 6 ) ) 
     }
     
@@ -315,6 +349,38 @@ class Test1 extends FunSuite
     {
     }
     
+    test( "View bounds" )
+    {
+        class WrappedInt( val value : Int )
+        
+        
+        val x = new WrappedInt( 3 )
+        val y = new WrappedInt( 4 )
+        
+        class OrderedWrappedInt( val v : WrappedInt ) extends Ordered[WrappedInt]
+        {
+            override def compare( other : WrappedInt ) =
+            {
+                if ( v.value < other.value ) -1
+                else if ( v.value == other.value ) 0
+                else 1
+            }
+        }
+        
+        object convs
+        {
+            implicit def wrappedIntToOrdered( v : WrappedInt ) = new OrderedWrappedInt( v )
+        }
+        
+        import convs._
+        
+        // View bounds: T can be converted to Ordered via an implicit
+        def lt[T <% Ordered[T]]( a : T, b : T ) = a < b
+        
+        assert( lt( x, y ) )
+        assert( !lt( y, x ) )
+    }
+    
     test( "Collection munging" )
     {
         val a = List(1,2,3,4,5,6,7,8,9,10,11,12,13,14)
@@ -322,6 +388,13 @@ class Test1 extends FunSuite
         val slice1 = a.takeWhile( _ < 13 ).dropWhile( _ > 5 )
         
         val b = a.view.map( x => x*x ).map( y => y + y )
+        
+        assert( b sameElements List(2, 8, 18, 32, 50, 72, 98, 128, 162, 200, 242, 288, 338, 392) )
+        
+        // Analagous to fold, but contains a list of the results
+        val c = a.scanLeft(0)( _ + _ )
+        
+        assert( c sameElements List(0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105) )
     }
     
     
@@ -330,7 +403,7 @@ class Test1 extends FunSuite
         import resource._
         
         for ( file1 <- managed( new java.io.FileOutputStream( "boo1.txt" ) );
-              file2 <- managed( new java.io.FileOutputStream( "boo1.txt" ) ) )
+              file2 <- managed( new java.io.FileOutputStream( "boo2.txt" ) ) )
         {
             //file1.write( "hello".toByteArray )
             //file2.write( "world".toByteArray )
