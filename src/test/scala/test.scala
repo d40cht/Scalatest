@@ -277,6 +277,40 @@ class Test1 extends FunSuite
         assert( newq3.length === 1 )
     }
     
+    test( "Views" )
+    {
+        val nums = 0 until 1000
+        val operateOn = nums.view.map( _ + 3 ).map( x => x * x ).force
+        assert( operateOn.take( 4 ) sameElements List( 9, 16, 25, 36 ) )
+        
+        val els2 = Array( 4, 5, 6, 7 )
+        val v = els2.view.slice( 1, 3 )
+        println( v.toList )
+        assert( v sameElements List( 5, 6 ) )
+        
+        els2(1) = 12
+        
+        println( v.toList )
+        assert( v sameElements List( 12, 6 ) ) 
+    }
+    
+    test( "Implicit parameters" )
+    {
+        class SomeState( val name : String )
+        
+        def addPrefix( word : String )( implicit ss : SomeState ) = ss.name + word
+        
+        {
+            implicit val v = new SomeState( "voo" )
+            assert( addPrefix( "Bling" ) === "vooBling" )
+        }
+        
+        {
+            implicit val v = new SomeState( "opo" )
+            assert( addPrefix( "Blong" ) === "opoBlong" )
+        }
+    }
+    
     test( "Collection munging" )
     {
         val a = List(1,2,3,4,5,6,7,8,9,10,11,12,13,14)
