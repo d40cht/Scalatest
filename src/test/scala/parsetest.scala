@@ -281,7 +281,7 @@ class DynamicASTEvaluator
 
 object CalculatorDSL extends JavaTokenParsers
 {
-    def expr: Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ term1)?) ^^
+    def expr: Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ expr)?) ^^
     {
         case e ~ None => e
         case l ~ Some("<=" ~ r)     => new CmpLe( l, r )
@@ -303,11 +303,11 @@ object CalculatorDSL extends JavaTokenParsers
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
     def idExpression : Parser[Expression] = ident ^^ { case x => new IdExpression(x) }
-    def factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e } | applyExpr ^^ { e => e }
+    def factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | applyExpr ^^ { e => e } | idExpression ^^ { e => e }
     def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
     
     //def applyExpr : Parser[Expression] = ident ~ ((expr)?) ^^ { case x ~ param => new Apply( x, param ) }
-    def applyExpr : Parser[Expression] = expr ~ expr ^^ { case x ~ y => new Apply( x, y ) }
+    def applyExpr : Parser[Expression] = /*(idExpression | applyExpr)*/idExpression ~ expr ^^ { case x ~ y => new Apply( x, y ) }
     
     def defn : Parser[Expression] = "def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
         case "def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
@@ -395,26 +395,36 @@ class CalculatorParseTest extends FunSuite
         ).value === 4.0 )    
     }
     
-    /*test("Simple function calls")
+    test("Simple function calls")
     {
+        /*assert( exec[DoubleValue]( 
+            "def double x = x * 2.0;" +
+            "double 5.0", dump=true
+        ).value === 10.0 )*/
+        
         assert( exec[DoubleValue]( 
             "def sum x y = x + y;" +
             "sum 3.0 5.0", dump=true
         ).value === 8.0 )
-        
+    }
+    
+    /*test("Function calls with arithmetic expressions as arguments")
+    {
         assert( exec[DoubleValue]( 
             "def sum x y = x + y;" +
             "sum 2.0+1.0 2.0+3.0", dump=true
         ).value === 8.0 )
-        
-        
+    }
+     
+    test("Partial application syntax(sort of)")
+    {
         assert( exec[DoubleValue]( 
             "def sum x y = x + y;" +
             "(sum 3.0) 5.0", dump=true
         ).value === 8.0 )
-     }
+    }*/
      
-    test("Simple function calls with variables as args")
+    /*test("Simple function calls with variables as args")
     {
         assert( exec[DoubleValue]( 
             "def sum x y = x + y;" +
