@@ -15,13 +15,12 @@ case class ExprTypeInteger extends ExprType
 
 
 sealed abstract class BaseValue
-abstract class ValueType[T] extends BaseValue
 
-case class UnitValue extends ValueType[Untyped]
-
-case class DoubleValue( val value: Double ) extends ValueType[ExprTypeDouble]
-case class BooleanValue( val value : Boolean ) extends ValueType[ExprTypeBoolean]
-case class IntegerValue( val value : Integer ) extends ValueType[ExprTypeInteger]
+case class UnitValue extends BaseValue
+case class DoubleValue( val value: Double ) extends BaseValue
+case class BooleanValue( val value : Boolean ) extends BaseValue
+case class IntegerValue( val value : Integer ) extends BaseValue
+case class FunctionValue( params : List[String], body : Expression ) extends BaseValue
 
 
 sealed abstract class Expression
@@ -31,7 +30,6 @@ sealed abstract class Expression
 
 case class NullExpression extends Expression
 case class Constant( value : BaseValue ) extends Expression
-
 case class CmpLt( left : Expression, right : Expression ) extends Expression
 case class CmpLe( left : Expression, right : Expression ) extends Expression
 case class CmpGt( left : Expression, right : Expression ) extends Expression
@@ -44,8 +42,9 @@ case class Subtraction( left : Expression, right : Expression ) extends Expressi
 case class Multiplication( left : Expression, right : Expression ) extends Expression
 case class Division( left : Expression, right : Expression ) extends Expression
 
-case class VarDefinition( id : String, value : Expression ) extends Expression
-case class Identifier( name : String ) extends Expression
+case class IdDefinition( id : String, args : List[String], value : Expression ) extends Expression
+case class Apply( lhs : Expression, rhs : Expression ) extends Expression
+case class IdExpression( id : String ) extends Expression
 case class ExprList( val elements : List[Expression] ) extends Expression
 case class BlockScopeExpression( val contents : Expression ) extends Expression
 case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
@@ -220,13 +219,41 @@ class DynamicASTEvaluator
             case Multiplication( left, right )      => evaluator.multiply( eval(left), eval(right) )
             case Division( left, right )            => evaluator.divide( eval(left), eval(right) )
             
-            case VarDefinition( name, value )       =>
+            case IdDefinition( name, args, value )  =>
             {
-                val res = eval(value)
-                context.setVar( name, res )
-                res
+                if ( args == Nil )
+                {
+                    context.setVar( name, eval(value) )
+                }
+                else
+                {
+                    context.setVar( name, new FunctionValue( args, value ) )
+                }
+                new UnitValue()
             }
-            case Identifier( name )                 => context.getVar(name)
+            case IdExpression( name )           => context.getVar(name)
+            case Apply( lhs, rhs )              =>
+            {
+                /*val applyVal = context.getVar(name)
+                
+                applyVal match
+                {
+                    case FunctionValue( args, body ) =>
+                    {
+                        if ( param == None ) applyVal
+                        else
+                        {
+                            new UnitValue()
+                        }
+                    }
+                    case _ =>
+                    {
+                        assert( param == None )
+                        applyVal
+                    }
+                }*/
+                new UnitValue()
+            }
             case ExprList( elements )               => elements.foldLeft(new UnitValue() : BaseValue)( (x, y) => eval(y) )
             case BlockScopeExpression( contents )   =>
             {
@@ -254,7 +281,7 @@ class DynamicASTEvaluator
 
 object CalculatorDSL extends JavaTokenParsers
 {
-    def expr : Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ term1)?) ^^
+    def expr: Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ term1)?) ^^
     {
         case e ~ None => e
         case l ~ Some("<=" ~ r)     => new CmpLe( l, r )
@@ -275,13 +302,15 @@ object CalculatorDSL extends JavaTokenParsers
         case l ~ Some("*" ~ r)   => new Multiplication( l, r )
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
-    def factor: Parser[Expression] = varDefn | blockScope | controlFlow | identExpr | fpLit | "(" ~> expr <~ ")" ^^ { e => e }
+    def idExpression : Parser[Expression] = ident ^^ { case x => new IdExpression(x) }
+    def factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e } | applyExpr ^^ { e => e }
     def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
     
-    def identExpr : Parser[Expression] = ident ^^ { x => new Identifier( x ) }
+    //def applyExpr : Parser[Expression] = ident ~ ((expr)?) ^^ { case x ~ param => new Apply( x, param ) }
+    def applyExpr : Parser[Expression] = expr ~ expr ^^ { case x ~ y => new Apply( x, y ) }
     
-    def varDefn : Parser[Expression] = "let" ~ ident ~ "=" ~ expr ^^ {
-        case "let" ~ id ~ "=" ~ e => new VarDefinition( id, e )
+    def defn : Parser[Expression] = "def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
+        case "def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
     }
     
     def exprList : Parser[ExprList] = expr ~ ((";" ~ exprList)?) ^^ {
@@ -297,8 +326,7 @@ object CalculatorDSL extends JavaTokenParsers
         }
     
     def blockScope : Parser[Expression] = "{" ~> exprList <~ "}" ^^ { e => new BlockScopeExpression( e ) }
-    
-    
+
     def parse( expression : String ) =
     {
         parseAll( exprList, expression ) match
@@ -311,9 +339,10 @@ object CalculatorDSL extends JavaTokenParsers
 
 class CalculatorParseTest extends FunSuite
 {
-    def exec[T]( str : String ) =
+    def exec[T]( str : String, dump : Boolean = false ) =
     {
         val parsed = CalculatorDSL.parse( str )
+        if (dump) println( parsed )
         val evaluator = new DynamicASTEvaluator()
         
         evaluator.eval( parsed ).asInstanceOf[T]
@@ -326,19 +355,20 @@ class CalculatorParseTest extends FunSuite
         assert( exec[DoubleValue]( "1.0*2.0*3.0" ).value === 6.0 )
         assert( exec[DoubleValue]( "2.0+3.0*3.0").value === 11.0 )
         assert( exec[DoubleValue]( "2.0*3.0+3.0").value === 9.0 )
-        assert( exec[DoubleValue]( "let x = 12.0" ).value === 12.0 )
-        assert( exec[DoubleValue]( "let x = 12.0; x * x" ).value === 144.0 )
+        assert( exec[DoubleValue]( "def x = 12.0; x" ).value === 12.0 )
+        assert( exec[DoubleValue]( "def x = 12.0; x * x" ).value === 144.0 )
         assert( exec[DoubleValue]( "3.0 ; 4.0 ; 5.0" ).value === 5.0 )
         
         assert( exec[DoubleValue](
-            "let y = 10;" +
-            "let z = 13;" +
+            "def y = 10;" +
+            "def z = 13;" +
             "y * z"
         ).value === 130 )
         
         assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).value === 3.0 )
         assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).value === 7.0 )
-        assert( exec[DoubleValue]( "let y = 10.0; { let y = 13.0; y }" ).value === 13.0 )
+        assert( exec[DoubleValue]( "def y = 10.0; { def y = 13.0; y }" ).value === 13.0 )
+        assert( exec[DoubleValue]( "def y = 10.0; def z = y; z" ).value === 10.0 )
         
         assert( exec[BooleanValue]( "4.0 < 5.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 <= 5.0" ).value === true )
@@ -353,12 +383,87 @@ class CalculatorParseTest extends FunSuite
         assert( exec[BooleanValue]( "4.0 >= 4.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 == 4.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 != 4.0" ).value === false )
-        
-        assert( exec[DoubleValue](
-            "let x = 12.0;" +
-            "let y = 13.0;" +
-            "let ret = 0.0;" +
-            "if ( x < y ) { let ret1=4.0 } else { let ret2=5.0 }"
-        ).value == 4.0 )
     }
+    
+    test("If expression")
+    {
+        assert( exec[DoubleValue](
+            "def x = 12.0;" +
+            "def y = 13.0;" +
+            "def ret = 0.0;" +
+            "if ( x < y ) { 4.0 } else { 5.0 }"
+        ).value === 4.0 )    
+    }
+    
+    /*test("Simple function calls")
+    {
+        assert( exec[DoubleValue]( 
+            "def sum x y = x + y;" +
+            "sum 3.0 5.0", dump=true
+        ).value === 8.0 )
+        
+        assert( exec[DoubleValue]( 
+            "def sum x y = x + y;" +
+            "sum 2.0+1.0 2.0+3.0", dump=true
+        ).value === 8.0 )
+        
+        
+        assert( exec[DoubleValue]( 
+            "def sum x y = x + y;" +
+            "(sum 3.0) 5.0", dump=true
+        ).value === 8.0 )
+     }
+     
+    test("Simple function calls with variables as args")
+    {
+        assert( exec[DoubleValue]( 
+            "def sum x y = x + y;" +
+            "def p = 3.0;" +
+            "def q = 5.0;" +
+            "sum p q", dump=true
+        ).value === 8.0 )
+    }
+
+    test("Simple recursion")
+    {   
+        assert( exec[DoubleValue]( 
+            "def sumSeries x = if (x==0) 0.0 else x+(sumSeries (x + (-1)));" +
+            "sumSeries 5.0"
+        ).value === 15.0 )
+    }
+    
+    test("Function as a first class object" )
+    {
+        assert( exec[DoubleValue]( 
+            "def sum x y = x + y;" +
+            "def sumcp = sum;" +
+            "sumcp 3.0 5.0"
+        ).value === 8.0 )     
+    }
+    
+    test("Function as function parameter" )
+    {
+        assert( exec[DoubleValue](
+            "def sum x y = x + y;" +
+            "def mul x y = x + y;" +
+            "def apply fn x y = fn x y;" +
+            "(apply sum 2.0 3.0) + (apply mul 4.0 5.0)"
+        ).value === 25.0 )
+    }
+    
+    test( "Manual partial application" )
+    {
+        assert( exec[DoubleValue](
+            "def sum x y = x + y;" +
+            "def double x = { def anon y = x + y; anon };" +
+            "double 4.0" ).value === 8.0 )
+    }
+    
+    test("Partial function application" )
+    {
+        assert( exec[DoubleValue](
+            "def sum x y = x + y;" +
+            "def inc = sum 1;" +
+            "inc 4" ).value === 5.0 )
+    }*/
 }
