@@ -31,10 +31,19 @@ sealed abstract class Expression
 
 case class NullExpression extends Expression
 case class Constant( value : BaseValue ) extends Expression
+
+case class CmpLt( left : Expression, right : Expression ) extends Expression
+case class CmpLe( left : Expression, right : Expression ) extends Expression
+case class CmpGt( left : Expression, right : Expression ) extends Expression
+case class CmpGe( left : Expression, right : Expression ) extends Expression
+case class CmpEq( left : Expression, right : Expression ) extends Expression
+case class CmpNe( left : Expression, right : Expression ) extends Expression
+
 case class Addition( left : Expression, right : Expression ) extends Expression
 case class Subtraction( left : Expression, right : Expression ) extends Expression
 case class Multiplication( left : Expression, right : Expression ) extends Expression
 case class Division( left : Expression, right : Expression ) extends Expression
+
 case class VarDefinition( id : String, value : Expression ) extends Expression
 case class Identifier( name : String ) extends Expression
 case class ExprList( val elements : List[Expression] ) extends Expression
@@ -123,6 +132,67 @@ class ValueEvaluator
             case _  => throw new TypeError( "Arguments to division are not of equal type" )
         }
     }
+    
+    def lt( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new BooleanValue(v1.value < v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value < v2.value)
+            case _  => throw new TypeError( "Arguments to < are not of equal type" )
+        }
+    }
+    
+    def le( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new BooleanValue(v1.value <= v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value <= v2.value)
+            case _  => throw new TypeError( "Arguments to <= are not of equal type" )
+        }
+    }
+    
+    def gt( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new BooleanValue(v1.value > v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value > v2.value)
+            case _  => throw new TypeError( "Arguments to > are not of equal type" )
+        }
+    }
+    
+    def ge( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new BooleanValue(v1.value >= v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value >= v2.value)
+            case _  => throw new TypeError( "Arguments to >= are not of equal type" )
+        }
+    }
+    
+    def eq( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new BooleanValue(v1.value == v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value == v2.value)
+            case _  => throw new TypeError( "Arguments to == are not of equal type" )
+        }
+    }
+    
+    
+    def ne( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new BooleanValue(v1.value != v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value != v2.value)
+            case _  => throw new TypeError( "Arguments to != are not of equal type" )
+        }
+    }
 }
 
 
@@ -137,10 +207,19 @@ class DynamicASTEvaluator
         {
             case NullExpression()                   => new UnitValue()
             case Constant( value )                  => value
+            
+            case CmpLt( left, right )               => evaluator.lt( eval(left), eval(right) )
+            case CmpLe( left, right )               => evaluator.le( eval(left), eval(right) )
+            case CmpGt( left, right )               => evaluator.gt( eval(left), eval(right) )
+            case CmpGe( left, right )               => evaluator.ge( eval(left), eval(right) )
+            case CmpEq( left, right )               => evaluator.eq( eval(left), eval(right) )
+            case CmpNe( left, right )               => evaluator.ne( eval(left), eval(right) )
+            
             case Addition( left, right )            => evaluator.add( eval(left), eval(right) )
             case Subtraction( left, right )         => evaluator.subtract( eval(left), eval(right) )
             case Multiplication( left, right )      => evaluator.multiply( eval(left), eval(right) )
             case Division( left, right )            => evaluator.divide( eval(left), eval(right) )
+            
             case VarDefinition( name, value )       =>
             {
                 val res = eval(value)
@@ -159,9 +238,12 @@ class DynamicASTEvaluator
             }
             case IfExpression( cond, trueBranch, falseBranch )  =>
             {
-                /*if ( eval( cond ) ) eval(trueBranch)
-                else eval( falseBranch )*/
-                new UnitValue()
+                eval(cond) match
+                {
+                    case BooleanValue(true)     => eval(trueBranch)
+                    case BooleanValue(false)    => eval(falseBranch)
+                    case _                      => throw new TypeError( "If expression condition is not of boolean type" )
+                }
             }
         }
     }
@@ -172,12 +254,23 @@ class DynamicASTEvaluator
 
 object CalculatorDSL extends JavaTokenParsers
 {
-    def expr: Parser[Expression] = term ~ ((("+"|"-") ~ expr)?) ^^ {
+    def expr : Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ term1)?) ^^
+    {
+        case e ~ None => e
+        case l ~ Some("<=" ~ r)     => new CmpLe( l, r )
+        case l ~ Some(">=" ~ r)     => new CmpGe( l, r )
+        case l ~ Some("==" ~ r)     => new CmpEq( l, r )
+        case l ~ Some("!=" ~ r)     => new CmpNe( l, r )
+        case l ~ Some("<" ~ r)      => new CmpLt( l, r )
+        case l ~ Some(">" ~ r)      => new CmpGt( l, r )
+    }
+    
+    def term1: Parser[Expression] = term0 ~ ((("+"|"-") ~ term1)?) ^^ {
         case e ~ None => e
         case l ~ Some("+" ~ r)    => new Addition( l, r )
         case l ~ Some("-" ~ r)    => new Subtraction( l, r )
     }
-    def term: Parser[Expression] = factor ~ ((("*"|"/") ~ term)?) ^^ {
+    def term0: Parser[Expression] = factor ~ ((("*"|"/") ~ term0)?) ^^ {
         case e ~ None => e
         case l ~ Some("*" ~ r)   => new Multiplication( l, r )
         case l ~ Some("/" ~ r)    => new Division( l, r )
@@ -197,7 +290,7 @@ object CalculatorDSL extends JavaTokenParsers
     }
     
     def controlFlow : Parser[Expression] =
-        "if" ~ "(" ~ expr ~ ")" ~ blockScope ~ (("else" ~ blockScope)?) ^^
+        "if" ~ "(" ~ expr ~ ")" ~ expr ~ (("else" ~ expr)?) ^^
         {
             case "if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ None                        => new IfExpression( cond, trueBranch, new NullExpression() )
             case "if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ Some("else" ~ falseBranch)  => new IfExpression( cond, trueBranch, falseBranch )
@@ -246,5 +339,26 @@ class CalculatorParseTest extends FunSuite
         assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).value === 3.0 )
         assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).value === 7.0 )
         assert( exec[DoubleValue]( "let y = 10.0; { let y = 13.0; y }" ).value === 13.0 )
+        
+        assert( exec[BooleanValue]( "4.0 < 5.0" ).value === true )
+        assert( exec[BooleanValue]( "4.0 <= 5.0" ).value === true )
+        assert( exec[BooleanValue]( "4.0 > 5.0" ).value === false )
+        assert( exec[BooleanValue]( "4.0 >= 5.0" ).value === false )
+        assert( exec[BooleanValue]( "4.0 == 5.0" ).value === false )
+        assert( exec[BooleanValue]( "4.0 != 5.0" ).value === true )
+        
+        assert( exec[BooleanValue]( "4.0 < 4.0" ).value === false )
+        assert( exec[BooleanValue]( "4.0 <= 4.0" ).value === true )
+        assert( exec[BooleanValue]( "4.0 > 4.0" ).value === false )
+        assert( exec[BooleanValue]( "4.0 >= 4.0" ).value === true )
+        assert( exec[BooleanValue]( "4.0 == 4.0" ).value === true )
+        assert( exec[BooleanValue]( "4.0 != 4.0" ).value === false )
+        
+        assert( exec[DoubleValue](
+            "let x = 12.0;" +
+            "let y = 13.0;" +
+            "let ret = 0.0;" +
+            "if ( x < y ) { let ret1=4.0 } else { let ret2=5.0 }"
+        ).value == 4.0 )
     }
 }
