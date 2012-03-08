@@ -3,14 +3,42 @@ import org.scalatest.FunSuite
 import scala.util.parsing.combinator._
 import scala.collection.{mutable, immutable}
 
-class ExecutionContext
+class VarHolder
 {
     var varValues = new immutable.HashMap[String, Double]()
+    
     def setVar( id : String, value : Double )
     {
         varValues += id -> value
     }
-    def getVar( id : String ) = varValues(id)
+    def getVar( id : String ) = varValues.get(id)
+}
+
+class ExecutionContext
+{
+    var varStack = List( new VarHolder() )
+    
+    def push()
+    {
+        varStack = new VarHolder() :: varStack
+    }
+    
+    def pop()
+    {
+        varStack = varStack.tail
+    }
+    
+    def setVar( id : String, value : Double ) = { varStack.head.setVar( id, value ) }
+    def getVar( id : String ) =
+    {
+        def getRec( id : String, stack : List[VarHolder] ) : Double = stack.head.getVar(id) match
+        {
+            case Some(value) => value
+            case _ => getRec( id, stack.tail )
+        }
+        
+        getRec( id, varStack )
+    }
 }
 
 sealed abstract class Expression
@@ -58,12 +86,27 @@ case class Identifier( name : String ) extends Expression
     def eval( implicit context : ExecutionContext ) = context.getVar(name)
 }
 
+case class ExprList( val elements : List[Expression] ) extends Expression
+{
+    def eval( implicit context : ExecutionContext ) = elements.foldLeft(0.0)( (x, y) => y.eval )
+}
+
+case class BlockScope( val contents : Expression ) extends Expression
+{
+    def eval( implicit context : ExecutionContext ) =
+    {
+        context.push()
+        val res = contents.eval
+        context.pop()
+     
+        res   
+    }
+}
+
 class CalcParseError( msg : String ) extends RuntimeException(msg)
 
 object CalculatorDSL extends JavaTokenParsers
 {
-    
-
     def expr: Parser[Expression] = term ~ ((("+"|"-") ~ expr)?) ^^ {
         case e ~ None => e
         case l ~ Some("+" ~ r)    => new Addition( l, r )
@@ -74,7 +117,7 @@ object CalculatorDSL extends JavaTokenParsers
         case l ~ Some("*" ~ r)   => new Multiplication( l, r )
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
-    def factor: Parser[Expression] = varDefn | identExpr | fpLit | "(" ~> expr <~ ")" ^^ { e => e }
+    def factor: Parser[Expression] = varDefn | blockScope | identExpr | fpLit | "(" ~> expr <~ ")" ^^ { e => e }
     def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( fpLit.toDouble ) }
     
     def identExpr : Parser[Expression] = ident ^^ { x => new Identifier( x ) }
@@ -83,18 +126,13 @@ object CalculatorDSL extends JavaTokenParsers
         case "let" ~ id ~ "=" ~ e => new VarDefinition( id, e )
     }
     
-    def exprList : Parser[Expression] =
-    {
-          expr ~ ((";" ~ exprList)?) ^^ {
-            case e ~ None           => e
-            case e ~ Some(";" ~ eL) => eL
-          }
+    def exprList : Parser[ExprList] = expr ~ ((";" ~ exprList)?) ^^ {
+        case e ~ None           => new ExprList( e :: Nil )
+        case e ~ Some(";" ~ eL) => new ExprList( e :: eL.elements )
     }
     
-    /*def blockDefn : Parser[Expression] = (
-          varDefn ~ ";"
-        | expr ~ ";" )*
-    */
+    def blockScope : Parser[Expression] = "{" ~> exprList <~ "}" ^^ { e => new BlockScope( e ) }
+    
     
     def parse( expression : String ) =
     {
@@ -141,6 +179,16 @@ class CalculatorParseTest extends FunSuite
         
         assert( CalculatorDSL.parse( "3.0 ; 4.0 ; 5.0" ).eval === 5.0 )
         
-        //CalculatorDSL.parse( "(4.0+5.0)/sa3.0" )
+        assert( CalculatorDSL.parse(
+            "let y = 10;" +
+            "let z = 13;" +
+            "y * z"
+        ).eval === 130 )
+        
+        assert( CalculatorDSL.parse( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).eval === 3.0 )
+        
+        assert( CalculatorDSL.parse( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).eval === 7.0 )
+        
+        assert( CalculatorDSL.parse( "let y = 10.0; { let y = 13.0; y }" ).eval === 13.0 )
     }
 }
