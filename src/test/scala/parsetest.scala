@@ -41,67 +41,81 @@ class ExecutionContext
     }
 }
 
+sealed abstract class ExprType
+
+case class Untyped extends ExprType
+case class ExprTypeDouble extends ExprType
+case class ExprTypeBoolean extends ExprType
+case class ExprTypeInteger extends ExprType
+
+
+sealed abstract class ValueType[T]
+
+case class UnitValue extends ValueType[Untyped]
+
+case class DoubleValue( val v: Double ) extends ValueType[ExprTypeDouble]
+case class BooleanValue( val v : Boolean ) extends ValueType[ExprTypeBoolean]
+case class IntegerValue( val v : Integer ) extends ValueType[ExprTypeInteger]
+
+
 sealed abstract class Expression
 {
-    def eval( implicit context : ExecutionContext ) : Double
+    def exprType = new Untyped()
 }
 
+case class NullExpression extends Expression
 case class Constant( value : Double ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) = value
-}
-
 case class Addition( left : Expression, right : Expression ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) = left.eval + right.eval
-}
-
 case class Subtraction( left : Expression, right : Expression ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) = left.eval - right.eval
-}
-
 case class Multiplication( left : Expression, right : Expression ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) = left.eval * right.eval
-}
-
 case class Division( left : Expression, right : Expression ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) = left.eval / right.eval
-}
-
 case class VarDefinition( id : String, value : Expression ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) =
-    {
-        val res = value.eval
-        context.setVar( id, res )
-        res
-    }
-}
-
 case class Identifier( name : String ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) = context.getVar(name)
-}
-
 case class ExprList( val elements : List[Expression] ) extends Expression
-{
-    def eval( implicit context : ExecutionContext ) = elements.foldLeft(0.0)( (x, y) => y.eval )
-}
+case class BlockScopeExpression( val contents : Expression ) extends Expression
+case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
 
-case class BlockScope( val contents : Expression ) extends Expression
+
+class DynamicEvaluator
 {
-    def eval( implicit context : ExecutionContext ) =
+    val context = new ExecutionContext()
+    
+    def eval( expr : Expression ) : Double =
     {
-        context.push()
-        val res = contents.eval
-        context.pop()
-     
-        res   
+        expr match
+        {
+            case NullExpression()                   => 0.0
+            case Constant( value )                  => value
+            case Addition( left, right )            => eval(left) + eval(right)
+            case Subtraction( left, right )         => eval(left) - eval(right)
+            case Multiplication( left, right )      => eval(left) * eval(right)
+            case Division( left, right )            => eval(left) / eval(right)
+            case VarDefinition( name, value )       =>
+            {
+                val res = eval(value)
+                context.setVar( name, res )
+                res
+            }
+            case Identifier( name )                 => context.getVar(name)
+            case ExprList( elements )               => elements.foldLeft(0.0)( (x, y) => eval(y) )
+            case BlockScopeExpression( contents )   =>
+            {
+                context.push()
+                val res = eval(contents)
+                context.pop()
+                
+                res
+            }
+            case IfExpression( cond, trueBranch, falseBranch )  =>
+            {
+                /*if ( eval( cond ) ) eval(trueBranch)
+                else eval( falseBranch )*/
+                0.0
+            }
+        }
     }
 }
+
 
 class CalcParseError( msg : String ) extends RuntimeException(msg)
 
@@ -117,7 +131,7 @@ object CalculatorDSL extends JavaTokenParsers
         case l ~ Some("*" ~ r)   => new Multiplication( l, r )
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
-    def factor: Parser[Expression] = varDefn | blockScope | identExpr | fpLit | "(" ~> expr <~ ")" ^^ { e => e }
+    def factor: Parser[Expression] = varDefn | blockScope | controlFlow | identExpr | fpLit | "(" ~> expr <~ ")" ^^ { e => e }
     def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( fpLit.toDouble ) }
     
     def identExpr : Parser[Expression] = ident ^^ { x => new Identifier( x ) }
@@ -131,7 +145,14 @@ object CalculatorDSL extends JavaTokenParsers
         case e ~ Some(";" ~ eL) => new ExprList( e :: eL.elements )
     }
     
-    def blockScope : Parser[Expression] = "{" ~> exprList <~ "}" ^^ { e => new BlockScope( e ) }
+    def controlFlow : Parser[Expression] =
+        "if" ~ "(" ~ expr ~ ")" ~ blockScope ~ (("else" ~ blockScope)?) ^^
+        {
+            case "if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ None                        => new IfExpression( cond, trueBranch, new NullExpression() )
+            case "if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ Some("else" ~ falseBranch)  => new IfExpression( cond, trueBranch, falseBranch )
+        }
+    
+    def blockScope : Parser[Expression] = "{" ~> exprList <~ "}" ^^ { e => new BlockScopeExpression( e ) }
     
     
     def parse( expression : String ) =
@@ -146,49 +167,33 @@ object CalculatorDSL extends JavaTokenParsers
 
 class CalculatorParseTest extends FunSuite
 {
-    test("Simple AST test")
+    def exec( str : String ) =
     {
-        implicit val executionContext = new ExecutionContext()
+        val parsed = CalculatorDSL.parse( str )
+        val evaluator = new DynamicEvaluator()
         
-        val expr = new Division( new Addition( new Constant( 4.0 ), new Constant( 5.0 ) ), new Constant( 3.0 ) )
-        assert( expr.eval === 3.0 )
+        evaluator.eval( parsed )
     }
     
     test("Simple parse test")
     {
-        implicit val executionContext = new ExecutionContext()
+        assert( exec( "(4.0+5.0)/3.0" ) === 3.0 )
+        assert( exec( "1.0+2.0+3.0" ) === 6.0 )
+        assert( exec( "1.0*2.0*3.0" ) === 6.0 )
+        assert( exec("2.0+3.0*3.0") === 11.0 )
+        assert( exec("2.0*3.0+3.0") === 9.0 )
+        assert( exec( "let x = 12.0" ) === 12.0 )
+        assert( exec( "let x = 12.0; x * x" ) === 144.0 )
+        assert( exec( "3.0 ; 4.0 ; 5.0" ) === 5.0 )
         
-        val res1 = CalculatorDSL.parse( "(4.0+5.0)/3.0" )
-        assert( res1.eval === 3.0 )
-        
-        val res2 = CalculatorDSL.parse( "1.0+2.0+3.0" )
-        assert( res2.eval === 6.0 )
-        
-        val res3 = CalculatorDSL.parse( "1.0*2.0*3.0" )
-        assert( res3.eval === 6.0 )
-        
-        val res4 = CalculatorDSL.parse( "2.0+3.0*3.0" )
-        assert( res4.eval === 11.0 )
-        
-        val res5 = CalculatorDSL.parse( "2.0*3.0+3.0" )
-        assert( res5.eval === 9.0 )
-        
-        assert( CalculatorDSL.parse( "let x = 12.0" ).eval === 12.0 )
-        
-        assert( CalculatorDSL.parse( "x * x" ).eval === 144.0 )
-        
-        assert( CalculatorDSL.parse( "3.0 ; 4.0 ; 5.0" ).eval === 5.0 )
-        
-        assert( CalculatorDSL.parse(
+        assert( exec(
             "let y = 10;" +
             "let z = 13;" +
             "y * z"
-        ).eval === 130 )
+        ) === 130 )
         
-        assert( CalculatorDSL.parse( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).eval === 3.0 )
-        
-        assert( CalculatorDSL.parse( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).eval === 7.0 )
-        
-        assert( CalculatorDSL.parse( "let y = 10.0; { let y = 13.0; y }" ).eval === 13.0 )
+        assert( exec( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ) === 3.0 )
+        assert( exec( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ) === 7.0 )
+        assert( exec( "let y = 10.0; { let y = 13.0; y }" ) === 13.0 )
     }
 }
