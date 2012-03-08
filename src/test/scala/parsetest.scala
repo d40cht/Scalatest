@@ -3,11 +3,52 @@ import org.scalatest.FunSuite
 import scala.util.parsing.combinator._
 import scala.collection.{mutable, immutable}
 
+
+sealed abstract class ExprType
+
+case class Untyped extends ExprType
+case class ExprTypeDouble extends ExprType
+case class ExprTypeBoolean extends ExprType
+case class ExprTypeInteger extends ExprType
+
+
+
+
+sealed abstract class BaseValue
+abstract class ValueType[T] extends BaseValue
+
+case class UnitValue extends ValueType[Untyped]
+
+case class DoubleValue( val value: Double ) extends ValueType[ExprTypeDouble]
+case class BooleanValue( val value : Boolean ) extends ValueType[ExprTypeBoolean]
+case class IntegerValue( val value : Integer ) extends ValueType[ExprTypeInteger]
+
+
+sealed abstract class Expression
+{
+    def exprType = new Untyped()
+}
+
+case class NullExpression extends Expression
+case class Constant( value : BaseValue ) extends Expression
+case class Addition( left : Expression, right : Expression ) extends Expression
+case class Subtraction( left : Expression, right : Expression ) extends Expression
+case class Multiplication( left : Expression, right : Expression ) extends Expression
+case class Division( left : Expression, right : Expression ) extends Expression
+case class VarDefinition( id : String, value : Expression ) extends Expression
+case class Identifier( name : String ) extends Expression
+case class ExprList( val elements : List[Expression] ) extends Expression
+case class BlockScopeExpression( val contents : Expression ) extends Expression
+case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
+
+class ParserError( msg : String ) extends RuntimeException(msg)
+class TypeError( msg : String ) extends RuntimeException(msg)
+
 class VarHolder
 {
-    var varValues = new immutable.HashMap[String, Double]()
+    var varValues = new immutable.HashMap[String, BaseValue]()
     
-    def setVar( id : String, value : Double )
+    def setVar( id : String, value : BaseValue )
     {
         varValues += id -> value
     }
@@ -28,10 +69,10 @@ class ExecutionContext
         varStack = varStack.tail
     }
     
-    def setVar( id : String, value : Double ) = { varStack.head.setVar( id, value ) }
+    def setVar( id : String, value : BaseValue ) = { varStack.head.setVar( id, value ) }
     def getVar( id : String ) =
     {
-        def getRec( id : String, stack : List[VarHolder] ) : Double = stack.head.getVar(id) match
+        def getRec( id : String, stack : List[VarHolder] ) : BaseValue = stack.head.getVar(id) match
         {
             case Some(value) => value
             case _ => getRec( id, stack.tail )
@@ -41,55 +82,65 @@ class ExecutionContext
     }
 }
 
-sealed abstract class ExprType
-
-case class Untyped extends ExprType
-case class ExprTypeDouble extends ExprType
-case class ExprTypeBoolean extends ExprType
-case class ExprTypeInteger extends ExprType
-
-
-sealed abstract class ValueType[T]
-
-case class UnitValue extends ValueType[Untyped]
-
-case class DoubleValue( val v: Double ) extends ValueType[ExprTypeDouble]
-case class BooleanValue( val v : Boolean ) extends ValueType[ExprTypeBoolean]
-case class IntegerValue( val v : Integer ) extends ValueType[ExprTypeInteger]
-
-
-sealed abstract class Expression
+class ValueEvaluator
 {
-    def exprType = new Untyped()
+    def add( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new DoubleValue(v1.value + v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value + v2.value)
+            case _  => throw new TypeError( "Arguments to addition are not of equal type" )
+        }
+    }
+    
+    def subtract( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new DoubleValue(v1.value - v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value - v2.value)
+            case _  => throw new TypeError( "Arguments to subtraction are not of equal type" )
+        }
+    }
+    
+    def multiply( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new DoubleValue(v1.value * v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value * v2.value)
+            case _  => throw new TypeError( "Arguments to multiplication are not of equal type" )
+        }
+    }
+    
+    def divide( left : BaseValue, right : BaseValue ) =
+    {
+        (left, right) match
+        {
+            case (v1 : DoubleValue, v2 : DoubleValue) => new DoubleValue(v1.value / v2.value)
+            case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value / v2.value)
+            case _  => throw new TypeError( "Arguments to division are not of equal type" )
+        }
+    }
 }
 
-case class NullExpression extends Expression
-case class Constant( value : Double ) extends Expression
-case class Addition( left : Expression, right : Expression ) extends Expression
-case class Subtraction( left : Expression, right : Expression ) extends Expression
-case class Multiplication( left : Expression, right : Expression ) extends Expression
-case class Division( left : Expression, right : Expression ) extends Expression
-case class VarDefinition( id : String, value : Expression ) extends Expression
-case class Identifier( name : String ) extends Expression
-case class ExprList( val elements : List[Expression] ) extends Expression
-case class BlockScopeExpression( val contents : Expression ) extends Expression
-case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
 
-
-class DynamicEvaluator
+class DynamicASTEvaluator
 {
     val context = new ExecutionContext()
+    val evaluator = new ValueEvaluator()
     
-    def eval( expr : Expression ) : Double =
+    def eval( expr : Expression ) : BaseValue =
     {
         expr match
         {
-            case NullExpression()                   => 0.0
+            case NullExpression()                   => new UnitValue()
             case Constant( value )                  => value
-            case Addition( left, right )            => eval(left) + eval(right)
-            case Subtraction( left, right )         => eval(left) - eval(right)
-            case Multiplication( left, right )      => eval(left) * eval(right)
-            case Division( left, right )            => eval(left) / eval(right)
+            case Addition( left, right )            => evaluator.add( eval(left), eval(right) )
+            case Subtraction( left, right )         => evaluator.subtract( eval(left), eval(right) )
+            case Multiplication( left, right )      => evaluator.multiply( eval(left), eval(right) )
+            case Division( left, right )            => evaluator.divide( eval(left), eval(right) )
             case VarDefinition( name, value )       =>
             {
                 val res = eval(value)
@@ -97,7 +148,7 @@ class DynamicEvaluator
                 res
             }
             case Identifier( name )                 => context.getVar(name)
-            case ExprList( elements )               => elements.foldLeft(0.0)( (x, y) => eval(y) )
+            case ExprList( elements )               => elements.foldLeft(new UnitValue() : BaseValue)( (x, y) => eval(y) )
             case BlockScopeExpression( contents )   =>
             {
                 context.push()
@@ -110,14 +161,14 @@ class DynamicEvaluator
             {
                 /*if ( eval( cond ) ) eval(trueBranch)
                 else eval( falseBranch )*/
-                0.0
+                new UnitValue()
             }
         }
     }
 }
 
 
-class CalcParseError( msg : String ) extends RuntimeException(msg)
+
 
 object CalculatorDSL extends JavaTokenParsers
 {
@@ -132,7 +183,7 @@ object CalculatorDSL extends JavaTokenParsers
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
     def factor: Parser[Expression] = varDefn | blockScope | controlFlow | identExpr | fpLit | "(" ~> expr <~ ")" ^^ { e => e }
-    def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( fpLit.toDouble ) }
+    def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
     
     def identExpr : Parser[Expression] = ident ^^ { x => new Identifier( x ) }
     
@@ -159,7 +210,7 @@ object CalculatorDSL extends JavaTokenParsers
     {
         parseAll( exprList, expression ) match
         {
-            case NoSuccess( msg, next ) => throw new CalcParseError( msg )
+            case NoSuccess( msg, next ) => throw new ParserError( msg )
             case Success( ast, next ) => ast
         }
     }
@@ -167,33 +218,33 @@ object CalculatorDSL extends JavaTokenParsers
 
 class CalculatorParseTest extends FunSuite
 {
-    def exec( str : String ) =
+    def exec[T]( str : String ) =
     {
         val parsed = CalculatorDSL.parse( str )
-        val evaluator = new DynamicEvaluator()
+        val evaluator = new DynamicASTEvaluator()
         
-        evaluator.eval( parsed )
+        evaluator.eval( parsed ).asInstanceOf[T]
     }
     
     test("Simple parse test")
     {
-        assert( exec( "(4.0+5.0)/3.0" ) === 3.0 )
-        assert( exec( "1.0+2.0+3.0" ) === 6.0 )
-        assert( exec( "1.0*2.0*3.0" ) === 6.0 )
-        assert( exec("2.0+3.0*3.0") === 11.0 )
-        assert( exec("2.0*3.0+3.0") === 9.0 )
-        assert( exec( "let x = 12.0" ) === 12.0 )
-        assert( exec( "let x = 12.0; x * x" ) === 144.0 )
-        assert( exec( "3.0 ; 4.0 ; 5.0" ) === 5.0 )
+        assert( exec[DoubleValue]( "(4.0+5.0)/3.0" ).value === 3.0 )
+        assert( exec[DoubleValue]( "1.0+2.0+3.0" ).value === 6.0 )
+        assert( exec[DoubleValue]( "1.0*2.0*3.0" ).value === 6.0 )
+        assert( exec[DoubleValue]( "2.0+3.0*3.0").value === 11.0 )
+        assert( exec[DoubleValue]( "2.0*3.0+3.0").value === 9.0 )
+        assert( exec[DoubleValue]( "let x = 12.0" ).value === 12.0 )
+        assert( exec[DoubleValue]( "let x = 12.0; x * x" ).value === 144.0 )
+        assert( exec[DoubleValue]( "3.0 ; 4.0 ; 5.0" ).value === 5.0 )
         
-        assert( exec(
+        assert( exec[DoubleValue](
             "let y = 10;" +
             "let z = 13;" +
             "y * z"
-        ) === 130 )
+        ).value === 130 )
         
-        assert( exec( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ) === 3.0 )
-        assert( exec( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ) === 7.0 )
-        assert( exec( "let y = 10.0; { let y = 13.0; y }" ) === 13.0 )
+        assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).value === 3.0 )
+        assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).value === 7.0 )
+        assert( exec[DoubleValue]( "let y = 10.0; { let y = 13.0; y }" ).value === 13.0 )
     }
 }
