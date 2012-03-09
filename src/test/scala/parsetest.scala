@@ -21,6 +21,9 @@ case class DoubleValue( val value: Double ) extends BaseValue
 case class BooleanValue( val value : Boolean ) extends BaseValue
 case class IntegerValue( val value : Integer ) extends BaseValue
 case class FunctionValue( params : List[String], body : Expression ) extends BaseValue
+case class ApplicationValue( val lhs : BaseValue, val rhs : BaseValue ) extends BaseValue
+
+
 
 
 sealed abstract class Expression
@@ -51,6 +54,7 @@ case class IfExpression( val cond : Expression, val trueBranch : Expression, val
 
 class ParserError( msg : String ) extends RuntimeException(msg)
 class TypeError( msg : String ) extends RuntimeException(msg)
+class VariableNotFoundError( msg : String ) extends RuntimeException(msg)
 
 class VarHolder
 {
@@ -83,7 +87,11 @@ class ExecutionContext
         def getRec( id : String, stack : List[VarHolder] ) : BaseValue = stack.head.getVar(id) match
         {
             case Some(value) => value
-            case _ => getRec( id, stack.tail )
+            case _ =>
+            {
+                if (stack.tail == Nil) throw new VariableNotFoundError( "Variable " + id + " not found" )
+                getRec( id, stack.tail )
+            }
         }
         
         getRec( id, varStack )
@@ -200,6 +208,48 @@ class DynamicASTEvaluator
     val context = new ExecutionContext()
     val evaluator = new ValueEvaluator()
     
+    def simplify( rawValue : BaseValue ) : BaseValue =
+    {
+        rawValue match
+        {
+            case ApplicationValue( lhs, rhs ) =>
+            {
+                def simpRec( input : BaseValue, argList : List[BaseValue] ) : BaseValue =
+                {
+                    input match
+                    {
+                        case ApplicationValue( lhs, rhs ) => simpRec( lhs, rhs :: argList )
+                        case FunctionValue( params, body ) =>
+                        {
+                            if ( params.length == argList.length )
+                            {
+                                context.push()
+                                params.zip( argList ).foreach
+                                {
+                                    case (p, a) =>
+                                    {
+                                        context.setVar( p, a )
+                                    }
+                                }
+                                val res = eval( body )
+                                context.pop()
+                                res
+                            }
+                            else
+                            {
+                                rawValue
+                            }
+                        }
+                        case _ => throw new TypeError( "Malformed application" )
+                    }
+                }
+                
+                simpRec( rawValue, List[BaseValue]() )
+            }
+            case _ => rawValue
+        }
+    }
+    
     def eval( expr : Expression ) : BaseValue =
     {
         expr match
@@ -223,7 +273,7 @@ class DynamicASTEvaluator
             {
                 if ( args == Nil )
                 {
-                    context.setVar( name, eval(value) )
+                    context.setVar( name, simplify( eval(value) ) )
                 }
                 else
                 {
@@ -234,25 +284,7 @@ class DynamicASTEvaluator
             case IdExpression( name )           => context.getVar(name)
             case Apply( lhs, rhs )              =>
             {
-                /*val applyVal = context.getVar(name)
-                
-                applyVal match
-                {
-                    case FunctionValue( args, body ) =>
-                    {
-                        if ( param == None ) applyVal
-                        else
-                        {
-                            new UnitValue()
-                        }
-                    }
-                    case _ =>
-                    {
-                        assert( param == None )
-                        applyVal
-                    }
-                }*/
-                new UnitValue()
+                simplify( new ApplicationValue( eval(lhs), eval(rhs) ) )
             }
             case ExprList( elements )               => elements.foldLeft(new UnitValue() : BaseValue)( (x, y) => eval(y) )
             case BlockScopeExpression( contents )   =>
@@ -279,11 +311,25 @@ class DynamicASTEvaluator
 
 
 
-object CalculatorDSL extends JavaTokenParsers
+object CalculatorDSL extends RegexParsers with PackratParsers
 {
-    def buildApply( initial : Expression, terms : List[Expression] ) = new NullExpression()
+    // TODO: Sort keyword parsing out to avoid having the minging '@' prefix
+    def ident: Parser[String] = """[a-zA-Z_]\w*""".r
+    def wholeNumber: Parser[String] = """-?\d+""".r
+    def decimalNumber: Parser[String] = """(\d+(\.\d*)?|\d*\.\d+)""".r
+    def stringLiteral: Parser[String] = ("\""+"""([^"\p{Cntrl}\\]|\\[\\/bfnrt]|\\u[a-fA-F0-9]{4})*"""+"\"").r
+    def floatingPointNumber: Parser[String] = """-?(\d+(\.\d*)?|\d*\.\d+)([eE][+-]?\d+)?[fFdD]?""".r
     
-    def expr: Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ expr)?) ^^
+    def buildApply( initial : Expression, terms : List[Expression] ) =
+    {
+        terms.foldLeft( initial )( (lhs, rhs) => new Apply( lhs, rhs ) )
+    }
+    
+    lazy val expr : Parser[Expression] = term2 ~ ((term2)*) ^^ {
+        case x ~ Nil    =>  x
+        case x ~ y      => buildApply(x, y) }
+    
+    lazy val term2: Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ expr)?) ^^
     {
         case e ~ None => e
         case l ~ Some("<=" ~ r)     => new CmpLe( l, r )
@@ -294,40 +340,36 @@ object CalculatorDSL extends JavaTokenParsers
         case l ~ Some(">" ~ r)      => new CmpGt( l, r )
     }
     
-    def term1: Parser[Expression] = term0 ~ ((("+"|"-") ~ term1)?) ^^ {
+    lazy val term1: Parser[Expression] = term0 ~ ((("+"|"-") ~ term1)?) ^^ {
         case e ~ None => e
         case l ~ Some("+" ~ r)    => new Addition( l, r )
         case l ~ Some("-" ~ r)    => new Subtraction( l, r )
     }
-    def term0: Parser[Expression] = factor ~ ((("*"|"/") ~ term0)?) ^^ {
+    lazy val term0: Parser[Expression] = factor ~ ((("*"|"/") ~ term0)?) ^^ {
         case e ~ None => e
         case l ~ Some("*" ~ r)   => new Multiplication( l, r )
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
-    def idExpression : Parser[Expression] = ident ^^ { case x => new IdExpression(x) }
-    def factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e } | applyExpr ^^ { e => e }
-    def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
-    
-    //def applyExpr : Parser[Expression] = ident ~ ((expr)?) ^^ { case x ~ param => new Apply( x, param ) }
-    def applyExpr : Parser[Expression] = expr ~ ((expr)+) ^^ { case x ~ y => buildApply(x, y)/*new Apply( x, y )*/ }
-    
-    def defn : Parser[Expression] = "def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
-        case "def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
+    lazy val idExpression : Parser[Expression] = ident ^^ { x => new IdExpression(x) }
+    lazy val factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e }
+    lazy val fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
+ 
+    lazy val defn : Parser[Expression] = "@def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
+        case "@def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
     }
     
-    def exprList : Parser[ExprList] = expr ~ ((";" ~ exprList)?) ^^ {
+    lazy val exprList : Parser[ExprList] = expr ~ ((";" ~ exprList)?) ^^ {
         case e ~ None           => new ExprList( e :: Nil )
         case e ~ Some(";" ~ eL) => new ExprList( e :: eL.elements )
     }
     
-    def controlFlow : Parser[Expression] =
-        "if" ~ "(" ~ expr ~ ")" ~ expr ~ (("else" ~ expr)?) ^^
-        {
-            case "if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ None                        => new IfExpression( cond, trueBranch, new NullExpression() )
-            case "if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ Some("else" ~ falseBranch)  => new IfExpression( cond, trueBranch, falseBranch )
-        }
+    lazy val controlFlow : Parser[Expression] = "@if" ~ "(" ~ expr ~ ")" ~ expr ~ (("@else" ~ expr)?) ^^
+    {
+        case "@if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ None                        => new IfExpression( cond, trueBranch, new NullExpression() )
+        case "@if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ Some("@else" ~ falseBranch)  => new IfExpression( cond, trueBranch, falseBranch )
+    }
     
-    def blockScope : Parser[Expression] = "{" ~> exprList <~ "}" ^^ { e => new BlockScopeExpression( e ) }
+    lazy val blockScope : Parser[Expression] = "{" ~> exprList <~ "}" ^^ { e => new BlockScopeExpression( e ) }
 
     def parse( expression : String ) =
     {
@@ -357,20 +399,20 @@ class CalculatorParseTest extends FunSuite
         assert( exec[DoubleValue]( "1.0*2.0*3.0" ).value === 6.0 )
         assert( exec[DoubleValue]( "2.0+3.0*3.0").value === 11.0 )
         assert( exec[DoubleValue]( "2.0*3.0+3.0").value === 9.0 )
-        assert( exec[DoubleValue]( "def x = 12.0; x" ).value === 12.0 )
-        assert( exec[DoubleValue]( "def x = 12.0; x * x" ).value === 144.0 )
+        assert( exec[DoubleValue]( "@def x = 12.0; x" ).value === 12.0 )
+        assert( exec[DoubleValue]( "@def x = 12.0; x * x" ).value === 144.0 )
         assert( exec[DoubleValue]( "3.0 ; 4.0 ; 5.0" ).value === 5.0 )
         
         assert( exec[DoubleValue](
-            "def y = 10;" +
-            "def z = 13;" +
+            "@def y = 10;" +
+            "@def z = 13;" +
             "y * z"
         ).value === 130 )
         
         assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).value === 3.0 )
         assert( exec[DoubleValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).value === 7.0 )
-        assert( exec[DoubleValue]( "def y = 10.0; { def y = 13.0; y }" ).value === 13.0 )
-        assert( exec[DoubleValue]( "def y = 10.0; def z = y; z" ).value === 10.0 )
+        assert( exec[DoubleValue]( "@def y = 10.0; { @def y = 13.0; y }" ).value === 13.0 )
+        assert( exec[DoubleValue]( "@def y = 10.0; @def z = y; z" ).value === 10.0 )
         
         assert( exec[BooleanValue]( "4.0 < 5.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 <= 5.0" ).value === true )
@@ -390,92 +432,93 @@ class CalculatorParseTest extends FunSuite
     test("If expression")
     {
         assert( exec[DoubleValue](
-            "def x = 12.0;" +
-            "def y = 13.0;" +
-            "def ret = 0.0;" +
-            "if ( x < y ) { 4.0 } else { 5.0 }"
+            "@def x = 12.0;" +
+            "@def y = 13.0;" +
+            "@def ret = 0.0;" +
+            "@if ( x < y ) { 4.0 } @else { 5.0 }"
         ).value === 4.0 )    
     }
     
     test("Simple function calls")
     {
-        /*assert( exec[DoubleValue]( 
-            "def double x = x * 2.0;" +
-            "double 5.0", dump=true
-        ).value === 10.0 )*/
+        assert( exec[DoubleValue]( 
+            "@def double x = x * 2.0;" +
+            "double 5.0"
+        ).value === 10.0 )
         
         assert( exec[DoubleValue]( 
-            "def sum x y = x + y;" +
-            "sum 3.0 5.0", dump=true
+            "@def sum x y = x + y;" +
+            "sum 3.0 5.0"
         ).value === 8.0 )
     }
     
-    /*test("Function calls with arithmetic expressions as arguments")
+    test("Function calls with arithmetic expressions as arguments")
     {
         assert( exec[DoubleValue]( 
-            "def sum x y = x + y;" +
-            "sum 2.0+1.0 2.0+3.0", dump=true
+            "@def sum x y = x + y;" +
+            "sum 2.0+1.0 2.0+3.0"
         ).value === 8.0 )
     }
      
     test("Partial application syntax(sort of)")
     {
         assert( exec[DoubleValue]( 
-            "def sum x y = x + y;" +
-            "(sum 3.0) 5.0", dump=true
+            "@def sum x y = x + y;" +
+            "(sum 3.0) 5.0"
         ).value === 8.0 )
-    }*/
+    }
      
-    /*test("Simple function calls with variables as args")
+    test("Simple function calls with variables as args")
     {
         assert( exec[DoubleValue]( 
-            "def sum x y = x + y;" +
-            "def p = 3.0;" +
-            "def q = 5.0;" +
-            "sum p q", dump=true
+            "@def sum x y = x + y;" +
+            "@def p = 3.0;" +
+            "@def q = 5.0;" +
+            "sum p q"
         ).value === 8.0 )
     }
 
     test("Simple recursion")
     {   
         assert( exec[DoubleValue]( 
-            "def sumSeries x = if (x==0) 0.0 else x+(sumSeries (x + (-1)));" +
-            "sumSeries 5.0"
+            "@def sumSeries x = @if (x==0) 0.0 @else x+(sumSeries (x + (-1)));" +
+            "sumSeries 5.0", dump=true
         ).value === 15.0 )
     }
     
     test("Function as a first class object" )
     {
         assert( exec[DoubleValue]( 
-            "def sum x y = x + y;" +
-            "def sumcp = sum;" +
+            "@def sum x y = x + y;" +
+            "@def sumcp = sum;" +
             "sumcp 3.0 5.0"
         ).value === 8.0 )     
-    }
-    
-    test("Function as function parameter" )
-    {
-        assert( exec[DoubleValue](
-            "def sum x y = x + y;" +
-            "def mul x y = x + y;" +
-            "def apply fn x y = fn x y;" +
-            "(apply sum 2.0 3.0) + (apply mul 4.0 5.0)"
-        ).value === 25.0 )
-    }
-    
-    test( "Manual partial application" )
-    {
-        assert( exec[DoubleValue](
-            "def sum x y = x + y;" +
-            "def double x = { def anon y = x + y; anon };" +
-            "double 4.0" ).value === 8.0 )
     }
     
     test("Partial function application" )
     {
         assert( exec[DoubleValue](
-            "def sum x y = x + y;" +
-            "def inc = sum 1;" +
+            "@def sum x y = x + y;" +
+            "@def inc = sum 1;" +
             "inc 4" ).value === 5.0 )
+    }
+    
+    test("Function as function parameter" )
+    {
+        assert( exec[DoubleValue](
+            "@def sum x y = x + y;" +
+            "@def mul x y = x * y;" +
+            "@def apply fn x y = fn x y;" +
+            "(apply sum 2.0 3.0) + (apply mul 4.0 5.0)"
+        ).value === 25.0 )
+    }
+    
+    /*test( "Manual partial application" )
+    {
+        assert( exec[DoubleValue](
+            "@def sum x y = x + y;" +
+            "@def double x = { @def anon y = x + y; anon };" +
+            "double 4.0", dump=true
+        ).value === 8.0 )
     }*/
 }
