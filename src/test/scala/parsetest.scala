@@ -281,6 +281,8 @@ class DynamicASTEvaluator
 
 object CalculatorDSL extends JavaTokenParsers
 {
+    def buildApply( initial : Expression, terms : List[Expression] ) = new NullExpression()
+    
     def expr: Parser[Expression] = term1 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ expr)?) ^^
     {
         case e ~ None => e
@@ -307,7 +309,7 @@ object CalculatorDSL extends JavaTokenParsers
     def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
     
     //def applyExpr : Parser[Expression] = ident ~ ((expr)?) ^^ { case x ~ param => new Apply( x, param ) }
-    def applyExpr : Parser[Expression] = /*(idExpression | applyExpr)*/idExpression ~ expr ^^ { case x ~ y => new Apply( x, y ) }
+    def applyExpr : Parser[Expression] = expr ~ ((expr)+) ^^ { case x ~ y => buildApply(x, y)/*new Apply( x, y )*/ }
     
     def defn : Parser[Expression] = "def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
         case "def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
