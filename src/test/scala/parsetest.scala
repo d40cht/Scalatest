@@ -66,13 +66,19 @@ case class ListTerminatorValue() extends BaseValue
 
 case class ListElementValue( val el : BaseValue, val next : BaseValue ) extends BaseValue
 {
-    override def toString = el.toString + "::" + next.toString
-    /*override def toString = next match
+    override def toString =
     {
-        case ListElementValue(el, next) => el.toString + ", " + next.toString
-        case ListTerminatorValue() => el.toString
-        case _ => throw new TypeError( "Malformed list" )
-    }*/
+        def rec( m : BaseValue ) : String =
+        {
+            m match
+            {
+                case ListElementValue(el, next) => el.toString + "::" + rec(next)
+                case ListTerminatorValue() => "nil"
+                case _ => throw new TypeError( "Invalid string value" )
+            }
+        }
+        "(" + rec(this) + ")"
+    }
 }
 
 
@@ -134,7 +140,8 @@ class ExecutionContext
     {
         setVar( "print", new BuiltInFunction( args =>
         {
-            println( args );
+            if ( args.length != 1 ) throw new TypeError( "print function takes only one parameter" )
+            println( args(0) );
             new UnitValue();
         } ) )
         
@@ -657,6 +664,14 @@ class CalculatorParseTest extends FunSuite
         //assert( exec[IntegerValue]( "@def x : int = 4; x" ).value === 4 )
     }
     
+    val mapFn = 
+        "@def map fn l =" +
+        "{" +
+        "    @if (l == nil) nil" +
+        "    @else (fn (head l)) :: (map fn (tail l))" +
+        "};"
+
+    
     test("If expression")
     {
         assert( exec[FloatValue](
@@ -789,7 +804,7 @@ class CalculatorParseTest extends FunSuite
         ).value === 16.0 )
     }
     
-    test( "Closures2: Manual (out of order) partial application" )
+    /*test( "Closures2: Manual (out of order) partial application" )
     {
         assert( exec[FloatValue](
             "@def divide x y = x / y;" +
@@ -798,7 +813,7 @@ class CalculatorParseTest extends FunSuite
             "@def third = fixedDivide 3.0;" +
             "(halve 16.0) + (third 9.0)"
         ).value === 11.0 )
-    }
+    }*/
     
     test("Blocks")
     {
@@ -808,13 +823,9 @@ class CalculatorParseTest extends FunSuite
     test("Functional tools: map")
     {
         assert( exec[ListElementValue](
-            "@def map fn l =" +
-            "{" +
-            "    @if (l == nil) nil" +
-            "    @else (fn (head l)) :: (map fn (tail l))" +
-            "};" +
+            mapFn +
             "map (@def square x=x*x) (1.0::2.0::3.0::4.0::nil)"
-        ).toString === "1.0::4.0::9.0::16.0::nil" )
+        ).toString === "(1.0::4.0::9.0::16.0::nil)" )
     }
     
     test("Functional tools: foldLeft")
@@ -842,8 +853,29 @@ class CalculatorParseTest extends FunSuite
             "    @else ((head l2) :: (merge l1 (tail l2)))" +
             "};"
 
-        assert( exec[ListElementValue]( mergeFn + "merge (1.0 :: 3.0 :: 5.0 :: nil) (0.0 :: 2.0 :: 4.0 :: 6.0 :: nil)" ).toString === "0.0::1.0::2.0::3.0::4.0::5.0::6.0::nil" )
-        assert( exec[ListElementValue]( mergeFn + "merge (merge (merge (3.0 :: nil) (4.0 :: nil)) (merge (1.0 :: nil) (2.0::nil))) (merge (0.0 :: nil) (5.0::nil))" ).toString === "0.0::1.0::2.0::3.0::4.0::5.0::nil" )
+        assert( exec[ListElementValue]( mergeFn + "merge (1.0 :: 3.0 :: 5.0 :: nil) (0.0 :: 2.0 :: 4.0 :: 6.0 :: nil)" ).toString === "(0.0::1.0::2.0::3.0::4.0::5.0::6.0::nil)" )
+        assert( exec[ListElementValue]( mergeFn + "merge (merge (merge (3.0 :: nil) (4.0 :: nil)) (merge (1.0 :: nil) (2.0::nil))) (merge (0.0 :: nil) (5.0::nil))" ).toString === "(0.0::1.0::2.0::3.0::4.0::5.0::nil)" )
+        
+        assert( exec[ListElementValue](
+            mapFn + 
+            mergeFn +
+            "@def unordered = 5.0::1.0::3.0::2.0::4.0::0.0::6.0::nil;" +
+            "@def elsAsLists = map (@def _ x = x::nil) unordered;" +
+            "@def mergePairs l =" +
+            "{" +
+            "    @if (l==nil) nil" +
+            "    @else" +
+            "    {" +
+            "        @def first = head l;" +
+            "        @def tail1 = tail l;" +
+            "        @if ( tail1 == nil ) first :: nil" +
+            "        @else (merge first (head tail1)) :: (mergePairs (tail tail1))" +
+            "    }" +
+            "};" +
+            "@def mergePairsRec l = @if ((tail l) == nil) (head l) @else (mergePairsRec (mergePairs l));" +
+            "mergePairsRec elsAsLists" ).toString === "(0.0::1.0::2.0::3.0::4.0::5.0::6.0::nil)" )
+            
+            
         
         /*val splitFn =
             "@def split l l1 l2=" +
