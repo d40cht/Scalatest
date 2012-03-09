@@ -305,7 +305,7 @@ object CalculatorDSL extends JavaTokenParsers
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
     def idExpression : Parser[Expression] = ident ^^ { case x => new IdExpression(x) }
-    def factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | applyExpr ^^ { e => e } | idExpression ^^ { e => e }
+    def factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e } | applyExpr ^^ { e => e }
     def fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
     
     //def applyExpr : Parser[Expression] = ident ~ ((expr)?) ^^ { case x ~ param => new Apply( x, param ) }
