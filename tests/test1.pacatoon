@@ -1,0 +1,46 @@
+@def map fn l =
+{
+    @if (l == nil) nil
+    @else (fn (head l)) :: (map fn (tail l))
+    
+    
+};
+
+@def foldLeft fn acc l =
+{
+    @if (l == nil) acc
+    @else (fn (head l) (foldLeft fn acc (tail l)))
+};
+            
+@def mergeSort l =
+{
+    @def elsAsLists l = map (@def _ x = x::nil) l;
+    @def mergePair l1 l2 =
+    {
+        @if ((l1 == nil) && (l2 == nil)) nil
+        @else @if (l1 == nil) ((head l2) :: (mergePair l1 (tail l2)))
+        @else @if (l2 == nil) ((head l1) :: (mergePair (tail l1) l2))
+        @else @if ((head l1) < (head l2)) ((head l1) :: (mergePair (tail l1) l2))
+        @else ((head l2) :: (mergePair l1 (tail l2)))
+    };
+    @def mergeAdjacentPairs l =
+    {
+        @if (l==nil) nil
+        @else
+        {
+            @def first = head l;
+            @def tail1 = tail l;
+            @if ( tail1 == nil ) first :: nil
+            @else (mergePair first (head tail1)) :: (mergeAdjacentPairs (tail tail1))
+        }
+    };
+    @def mergeSortRec l = @if ((tail l) == nil) (head l) @else (mergeSortRec (mergeAdjacentPairs l));
+    
+    mergeSortRec (elsAsLists l)
+};
+
+@def a = 5::4::3::6::7::9::8::0::1::2::nil;
+
+
+print (mergeSort a)
+
