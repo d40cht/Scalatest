@@ -44,7 +44,7 @@ case class StringValue( val value : String ) extends BaseValue
     override def toString = value
 }
 
-case class BuiltInFunction( fn : List[BaseValue] => BaseValue ) extends BaseValue
+case class BuiltInFunction( numArgs : Int, fn : List[BaseValue] => BaseValue ) extends BaseValue
 {
     override def toString = "builtin"
 }
@@ -87,6 +87,7 @@ case class ListElementValue( val el : BaseValue, val next : BaseValue ) extends 
 
 class TypeError( msg : String ) extends RuntimeException(msg)
 class VariableNotFoundError( msg : String ) extends RuntimeException(msg)
+class AssertionFailure( msg : String ) extends RuntimeException(msg)
 
 class VarHolder
 {
@@ -105,7 +106,7 @@ class ExecutionContext
     
     // Add built-ins
     {
-        setVar( "import", new BuiltInFunction( args =>
+        setVar( "import", new BuiltInFunction( 1, args =>
         {
             if ( args.length != 1 ) throw new TypeError( "import function takes only one parameter" )
             
@@ -126,14 +127,29 @@ class ExecutionContext
             new UnitValue();
         } ) )
         
-        setVar( "print", new BuiltInFunction( args =>
+        setVar( "assertEqual", new BuiltInFunction( 2, args =>
+        {
+            if ( args.length != 2 ) throw new TypeError( "assertEqual function takes two parameters" )
+            val (a, b) = (args(0), args(1))
+            if ( a != b )
+            {
+                throw new AssertionFailure( a.toString + " != " + b.toString )
+            }
+            else
+            {
+                println( "[Assertion passed]" )
+            }
+            new UnitValue();
+        } ) )
+        
+        setVar( "print", new BuiltInFunction( 1, args =>
         {
             if ( args.length != 1 ) throw new TypeError( "print function takes only one parameter" )
             println( args(0) );
             new UnitValue();
         } ) )
         
-        setVar( "toString", new BuiltInFunction( args =>
+        setVar( "toString", new BuiltInFunction( 1, args =>
         {
             if ( args.length != 1 ) throw new TypeError( "toString function takes only one parameter" )
             new StringValue( args(0).toString )
@@ -141,7 +157,7 @@ class ExecutionContext
         
         setVar( "nil", new ListTerminatorValue() )
         
-        setVar( "head", new BuiltInFunction( args =>
+        setVar( "head", new BuiltInFunction( 1, args =>
         {
             if ( args.length != 1 ) throw new TypeError( "head function takes only one parameter" )
             
@@ -153,7 +169,7 @@ class ExecutionContext
             }
         } ) )
         
-        setVar( "tail", new BuiltInFunction( args =>
+        setVar( "tail", new BuiltInFunction( 1, args =>
         {
             if ( args.length != 1 ) throw new TypeError( "tail function takes only one parameter" )
             
@@ -320,7 +336,17 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                     input match
                     {
                         case ApplicationValue( lhs, rhs ) => simpRec( lhs, rhs :: argList )
-                        case BuiltInFunction( fn ) => fn( argList )
+                        case BuiltInFunction( numArgs, fn ) =>
+                        {
+                            if ( numArgs == argList.length )
+                            {
+                                fn( argList )
+                            }
+                            else
+                            {
+                                rawValue
+                            }
+                        }
                         case FunctionValue( params, body ) =>
                         {
                             if ( params.length == argList.length )
