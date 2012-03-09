@@ -351,8 +351,23 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         case l ~ Some("/" ~ r)    => new Division( l, r )
     }
     lazy val idExpression : Parser[Expression] = ident ^^ { x => new IdExpression(x) }
-    lazy val factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e }
-    lazy val fpLit : Parser[Expression] = floatingPointNumber ^^ { fpLit => new Constant( new DoubleValue(fpLit.toDouble) ) }
+    lazy val factor: Parser[Expression] = defn | blockScope | controlFlow | /*intLit |*/ fpLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e }
+    lazy val fpLit : Parser[Expression] = floatingPointNumber ^^ 
+    {
+        lit =>
+        {
+            val isInteger = !lit.foldLeft(false)((x,y) => x || (y=='.'))
+            if ( isInteger )
+            {
+                new Constant( new IntegerValue(lit.toInt) )
+            }
+            else
+            {
+                new Constant( new DoubleValue(lit.toDouble) )
+            }
+        } 
+    }
+    lazy val intLit : Parser[Expression] = wholeNumber ^^ { intLit => new Constant( new IntegerValue(intLit.toInt) ) }
  
     lazy val defn : Parser[Expression] = "@def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
         case "@def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
@@ -404,8 +419,8 @@ class CalculatorParseTest extends FunSuite
         assert( exec[DoubleValue]( "3.0 ; 4.0 ; 5.0" ).value === 5.0 )
         
         assert( exec[DoubleValue](
-            "@def y = 10;" +
-            "@def z = 13;" +
+            "@def y = 10.0;" +
+            "@def z = 13.0;" +
             "y * z"
         ).value === 130 )
         
@@ -427,6 +442,8 @@ class CalculatorParseTest extends FunSuite
         assert( exec[BooleanValue]( "4.0 >= 4.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 == 4.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 != 4.0" ).value === false )
+        
+        assert( exec[IntegerValue]( "4 * 5" ).value == 20 )
     }
     
     test("If expression")
@@ -481,7 +498,7 @@ class CalculatorParseTest extends FunSuite
     test("Simple recursion")
     {   
         assert( exec[DoubleValue]( 
-            "@def sumSeries x = @if (x==0) 0.0 @else x+(sumSeries (x + (-1)));" +
+            "@def sumSeries x = @if (x==0.0) 0.0 @else x+(sumSeries (x + (-1.0)));" +
             "sumSeries 5.0", dump=true
         ).value === 15.0 )
     }
@@ -497,10 +514,10 @@ class CalculatorParseTest extends FunSuite
     
     test("Partial function application" )
     {
-        assert( exec[DoubleValue](
+        assert( exec[IntegerValue](
             "@def sum x y = x + y;" +
             "@def inc = sum 1;" +
-            "inc 4" ).value === 5.0 )
+            "inc 4" ).value === 5 )
     }
     
     test("Function as function parameter" )
