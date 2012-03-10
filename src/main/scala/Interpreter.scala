@@ -484,6 +484,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
             
             case IdDefinition( name, args, value )  =>
             {
+                println( "Assign to ", name, " on line ", expr.pos )
                 val rhs = args match
                 {
                     case Nil => simplify( eval(value) )

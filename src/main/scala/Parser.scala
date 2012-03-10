@@ -1,8 +1,10 @@
 package org.seacourt.pacatoon
 
 import scala.util.parsing.combinator._
+import scala.util.parsing.input.Positional
 
-sealed abstract class Expression
+
+sealed abstract class Expression extends Positional
 {
     def exprType = new Untyped()
 }
@@ -54,18 +56,18 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         terms.foldLeft( initial )( (lhs, rhs) => new Apply( lhs, rhs ) )
     }
     
-    lazy val expr : Parser[Expression] = term4 ~ ((term4)*) ^^ {
+    lazy val expr : Parser[Expression] = positioned(term4 ~ ((term4)*) ^^ {
         case x ~ Nil    =>  x
-        case x ~ y      => buildApply(x, y) }
+        case x ~ y      => buildApply(x, y) })
         
-    lazy val term4: Parser[Expression] = term3 ~ ((("&&"|"||") ~ expr)?) ^^
+    lazy val term4: Parser[Expression] = positioned(term3 ~ ((("&&"|"||") ~ expr)?) ^^
     {
         case e ~ None => e
         case l ~ Some("&&" ~ r)     => new LogicalAnd( l, r )
         case l ~ Some("||" ~ r)     => new LogicalOr( l, r )
-    }
+    })
     
-    lazy val term3: Parser[Expression] = term2 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ expr)?) ^^
+    lazy val term3: Parser[Expression] = positioned(term2 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ expr)?) ^^
     {
         case e ~ None => e
         case l ~ Some("<=" ~ r)     => new CmpLe( l, r )
@@ -74,29 +76,30 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         case l ~ Some("!=" ~ r)     => new CmpNe( l, r )
         case l ~ Some("<" ~ r)      => new CmpLt( l, r )
         case l ~ Some(">" ~ r)      => new CmpGt( l, r )
-    }
+    })
     
-    lazy val term2: Parser[Expression] = term1 ~ ((("+"|"-") ~ term2)?) ^^ {
+    lazy val term2: Parser[Expression] = positioned(term1 ~ ((("+"|"-") ~ term2)?) ^^ {
         case e ~ None => e
         case l ~ Some("+" ~ r)      => new Addition( l, r )
         case l ~ Some("-" ~ r)      => new Subtraction( l, r )
-    }
-    lazy val term1: Parser[Expression] = term0 ~ ((("*"|"/") ~ term1)?) ^^ {
+    })
+    
+    lazy val term1: Parser[Expression] = positioned(term0 ~ ((("*"|"/") ~ term1)?) ^^ {
         case e ~ None => e
         case l ~ Some("*" ~ r)      => new Multiplication( l, r )
         case l ~ Some("/" ~ r)      => new Division( l, r )
-    }
+    })
     
-    lazy val term0: Parser[Expression] = factor ~ (("::" ~ term1)?) ^^ {
+    lazy val term0: Parser[Expression] = positioned(factor ~ (("::" ~ term1)?) ^^ {
         case e ~ None => e
         case l ~ Some("::" ~ r)     => new ListAppend( l, r )
-    }
+    })
     
-    lazy val idExpression : Parser[Expression] = ident ^^ { x => new IdExpression(x) }
+    lazy val idExpression : Parser[Expression] = positioned(ident ^^ { x => new IdExpression(x) })
     
-    lazy val factor: Parser[Expression] = blockScope | controlFlow | defn | fpLit | stringLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e }
+    lazy val factor: Parser[Expression] = positioned(blockScope | controlFlow | defn | fpLit | stringLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e })
     
-    lazy val fpLit : Parser[Expression] = floatingPointNumber ^^ 
+    lazy val fpLit : Parser[Expression] = positioned(floatingPointNumber ^^ 
     {
         lit =>
         {
@@ -110,27 +113,28 @@ object CalculatorDSL extends RegexParsers with PackratParsers
                 new Constant( new FloatValue(lit.toDouble) )
             }
         } 
-    }
-    lazy val stringLit : Parser[Expression] = stringLiteral ^^ { str => new Constant( new StringValue( str.drop(1).dropRight(1) ) ) }
+    })
+    
+    lazy val stringLit : Parser[Expression] = positioned(stringLiteral ^^ { str => new Constant( new StringValue( str.drop(1).dropRight(1) ) ) })
  
-    lazy val defn : Parser[Expression] = "@def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
+    lazy val defn : Parser[Expression] = positioned("@def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
         case "@def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
-    }
+    })
     
-    lazy val topLevel = comment | expr ^^ { x => x }
+    lazy val topLevel = positioned(comment | expr ^^ { x => x })
     
-    lazy val exprList : Parser[ExprList] = topLevel ~ ((((";")?) ~ exprList)?) ^^ {
+    lazy val exprList : Parser[ExprList] = positioned(topLevel ~ ((((";")?) ~ exprList)?) ^^ {
         case e ~ None           => new ExprList( e :: Nil )
         case e ~ Some(_ ~ eL)   => new ExprList( e :: eL.elements )
-    }
+    })
     
-    lazy val controlFlow : Parser[Expression] = "@if" ~ "(" ~ expr ~ ")" ~ expr ~ (("@else" ~ expr)?) ^^
+    lazy val controlFlow : Parser[Expression] = positioned("@if" ~ "(" ~ expr ~ ")" ~ expr ~ (("@else" ~ expr)?) ^^
     {
         case "@if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ None                           => new IfExpression( cond, trueBranch, new NullExpression() )
         case "@if" ~ "(" ~ cond ~ ")" ~ trueBranch ~ Some("@else" ~ falseBranch)    => new IfExpression( cond, trueBranch, falseBranch )
-    }
+    })
     
-    lazy val blockScope : Parser[Expression] = "{" ~> exprList <~ "}" ^^ { e => new BlockScopeExpression( e ) }
+    lazy val blockScope : Parser[Expression] = positioned("{" ~> exprList <~ "}" ^^ { e => new BlockScopeExpression( e ) })
 
     def parse( expression : String ) =
     {
