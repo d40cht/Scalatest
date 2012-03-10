@@ -46,6 +46,9 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     def stringLiteral: Parser[String] = ("\""+"""([^"\p{Cntrl}\\]|\\[\\/bfnrt]|\\u[a-fA-F0-9]{4})*"""+"\"").r
     def floatingPointNumber: Parser[String] = """-?(\d+(\.\d*)?|\d*\.\d+)([eE][+-]?\d+)?[fFdD]?""".r
     
+    def comment: Parser[Expression] = """//[^\r\n]*""".r ^^ { x => new NullExpression() }
+    
+    
     def buildApply( initial : Expression, terms : List[Expression] ) =
     {
         terms.foldLeft( initial )( (lhs, rhs) => new Apply( lhs, rhs ) )
@@ -91,7 +94,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     
     lazy val idExpression : Parser[Expression] = ident ^^ { x => new IdExpression(x) }
     
-    lazy val factor: Parser[Expression] = defn | blockScope | controlFlow | fpLit | stringLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e }
+    lazy val factor: Parser[Expression] = blockScope | controlFlow | defn | fpLit | stringLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e }
     
     lazy val fpLit : Parser[Expression] = floatingPointNumber ^^ 
     {
@@ -114,9 +117,11 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         case "@def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
     }
     
-    lazy val exprList : Parser[ExprList] = expr ~ ((";" ~ exprList)?) ^^ {
+    lazy val topLevel = comment | expr ^^ { x => x }
+    
+    lazy val exprList : Parser[ExprList] = topLevel ~ ((((";")?) ~ exprList)?) ^^ {
         case e ~ None           => new ExprList( e :: Nil )
-        case e ~ Some(";" ~ eL) => new ExprList( e :: eL.elements )
+        case e ~ Some(_ ~ eL)   => new ExprList( e :: eL.elements )
     }
     
     lazy val controlFlow : Parser[Expression] = "@if" ~ "(" ~ expr ~ ")" ~ expr ~ (("@else" ~ expr)?) ^^

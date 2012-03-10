@@ -39,11 +39,13 @@
     mergeSortRec (elsAsLists l)
 };
 
+// Am I allowed a comment?
+
 @def reverse l =
 {
     @def revrec l rl = @if (l==nil) rl @else revrec (tail l) ((head l)::rl);
     revrec l nil
-};
+}
 
 assertEqual (reverse (1.0::2.0::3.0::4.0::nil)) (4.0::3.0::2.0::1.0::nil);
 
