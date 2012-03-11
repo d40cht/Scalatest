@@ -1,5 +1,6 @@
 package org.seacourt.pacatoon
 
+import scala.collection.{mutable, immutable}
 import scala.util.parsing.combinator._
 import scala.util.parsing.input.Positional
 
@@ -10,7 +11,16 @@ case class TypeUnit extends ExprType
 case class TypeFloat extends ExprType
 case class TypeBoolean extends ExprType
 case class TypeInteger extends ExprType
+
 case class FunctionType( val argTypes : List[ExprType], val retType: ExprType ) extends ExprType
+
+case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
+
+// Need to implement typing for lists using variant types. 'ListType'[T]{ 'nil' => TypeUnit, 'cons' => TypeTuple[T]( T, ListType[T] ) }
+//
+// Start with option type
+case class VariantType( val variants : immutable.HashMap[String, ExprType] ) extends ExprType
+
 
 
 
