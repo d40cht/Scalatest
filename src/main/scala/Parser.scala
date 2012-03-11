@@ -140,7 +140,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     {
         parseAll( exprList, expression ) match
         {
-            case NoSuccess( msg, next ) => throw new ParserError( msg )
+            case NoSuccess( msg, next ) => throw new ParserError( "(line " + next.pos.line + ", column " + next.pos.column + "): " + msg )
             case Success( ast, next ) => ast
         }
     }

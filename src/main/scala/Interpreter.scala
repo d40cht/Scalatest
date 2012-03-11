@@ -388,7 +388,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
         
         def bindRec( expr : Expression ) : Expression =
         {
-            expr match
+            val res = expr match
             {
                 case NullExpression()                   => new NullExpression()
                 case Constant( value )                  => expr
@@ -430,6 +430,9 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                 }
                 case IfExpression( cond, trueBranch, falseBranch )  => new IfExpression( bindRec(cond), bindRec(trueBranch), bindRec(falseBranch) )
             }
+            
+            res.setPos( expr.pos )
+            res
         }
         
         val bound = bindRec( expr )
@@ -484,7 +487,6 @@ class DynamicASTEvaluator( val context : ExecutionContext )
             
             case IdDefinition( name, args, value )  =>
             {
-                println( "Assign to ", name, " on line ", expr.pos )
                 val rhs = args match
                 {
                     case Nil => simplify( eval(value) )
