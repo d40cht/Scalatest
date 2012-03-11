@@ -17,6 +17,7 @@
     @def elsAsLists l = map (@def _ x = x::nil) l;
     @def mergePair l1 l2 =
     {
+        // Wouldn't it be nice to have pattern matching?
         @if ((l1 == nil) && (l2 == nil)) nil
         @else @if (l1 == nil) ((head l2) :: (mergePair l1 (tail l2)))
         @else @if (l2 == nil) ((head l1) :: (mergePair (tail l1) l2))
@@ -46,6 +47,10 @@
     @def revrec l rl = @if (l==nil) rl @else revrec (tail l) ((head l)::rl);
     revrec l nil
 };
+
+//@def a : Integer = 12
+//@def b : Float = 13.0
+//@def sum (x : Integer) (y : Integer) : Integer = x + y
 
 assertEqual (reverse (1.0::2.0::3.0::4.0::nil)) (4.0::3.0::2.0::1.0::nil);
 

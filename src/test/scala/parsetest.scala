@@ -8,7 +8,7 @@ class CalculatorParseTest extends FunSuite
     def exec[T]( str : String, dump : Boolean = false ) =
     {
         val parsed = CalculatorDSL.parse( str )
-        if (dump) println( parsed )
+        if (dump) DumpAST( parsed )
         val execContext = new ExecutionContext()
         val evaluator = new DynamicASTEvaluator( execContext )
         
@@ -72,7 +72,7 @@ class CalculatorParseTest extends FunSuite
             "@def x = 12.0;" +
             "@def y = 13.0;" +
             "@def ret = 0.0;" +
-            "@if ( x < y ) { 4.0 } @else { 5.0 }"
+            "@if ( x < y ) { 4.0 } @else { 5.0 }", dump=true
         ).value === 4.0 )    
     }
     

@@ -2,14 +2,8 @@ package org.seacourt.pacatoon
 
 
 import scala.collection.{mutable, immutable}
+import scala.util.parsing.input.{Position, NoPosition}
 
-
-sealed abstract class ExprType
-
-case class Untyped extends ExprType
-case class ExprTypeFloat extends ExprType
-case class ExprTypeBoolean extends ExprType
-case class ExprTypeInteger extends ExprType
 
 
 
@@ -44,7 +38,7 @@ case class StringValue( val value : String ) extends BaseValue
     override def toString = value
 }
 
-case class BuiltInFunction( numArgs : Int, fn : List[BaseValue] => BaseValue ) extends BaseValue
+case class BuiltInFunction( numArgs : Int, fn : (Position, List[BaseValue]) => BaseValue ) extends BaseValue
 {
     override def toString = "builtin"
 }
@@ -74,7 +68,7 @@ case class ListElementValue( val el : BaseValue, val next : BaseValue ) extends 
             {
                 case ListElementValue(el, next) => el.toString + "::" + rec(next)
                 case ListTerminatorValue() => "nil"
-                case _ => throw new TypeError( "Invalid string value" )
+                case _ => throw new TypeError( NoPosition, "Invalid string value" )
             }
         }
         "(" + rec(this) + ")"
@@ -83,11 +77,11 @@ case class ListElementValue( val el : BaseValue, val next : BaseValue ) extends 
 
 
 
+class PositionedException( position : Position, msg : String ) extends RuntimeException( "("+position.line+", "+position.column+"): " + msg )
 
-
-class TypeError( msg : String ) extends RuntimeException(msg)
-class VariableNotFoundError( msg : String ) extends RuntimeException(msg)
-class AssertionFailure( msg : String ) extends RuntimeException(msg)
+class TypeError( _position : Position, _msg : String ) extends PositionedException(_position, _msg)
+class VariableNotFoundError( _position : Position, _msg : String ) extends PositionedException(_position, _msg)
+class AssertionFailure( _position : Position, _msg : String ) extends PositionedException(_position, _msg)
 
 class VarHolder
 {
@@ -106,9 +100,9 @@ class ExecutionContext
     
     // Add built-ins
     {
-        setVar( "import", new BuiltInFunction( 1, args =>
+        setVar( "import", new BuiltInFunction( 1, (pos, args) =>
         {
-            if ( args.length != 1 ) throw new TypeError( "import function takes only one parameter" )
+            if ( args.length != 1 ) throw new TypeError( pos, "import function takes only one parameter" )
             
             args(0) match
             {
@@ -122,18 +116,18 @@ class ExecutionContext
                     val evaluator = new DynamicASTEvaluator(this)
                     evaluator.eval( parsed )
                 }
-                case _ => throw new TypeError( "import function requires a string parameter" )
+                case _ => throw new TypeError( pos, "import function requires a string parameter" )
             }
             new UnitValue();
         } ) )
         
-        setVar( "assertEqual", new BuiltInFunction( 2, args =>
+        setVar( "assertEqual", new BuiltInFunction( 2, (pos, args) =>
         {
-            if ( args.length != 2 ) throw new TypeError( "assertEqual function takes two parameters" )
+            if ( args.length != 2 ) throw new TypeError( pos, "assertEqual function takes two parameters" )
             val (a, b) = (args(0), args(1))
             if ( a != b )
             {
-                throw new AssertionFailure( a.toString + " != " + b.toString )
+                throw new AssertionFailure( pos, a.toString + " != " + b.toString )
             }
             else
             {
@@ -142,42 +136,42 @@ class ExecutionContext
             new UnitValue();
         } ) )
         
-        setVar( "print", new BuiltInFunction( 1, args =>
+        setVar( "print", new BuiltInFunction( 1, (pos, args) =>
         {
-            if ( args.length != 1 ) throw new TypeError( "print function takes only one parameter" )
+            if ( args.length != 1 ) throw new TypeError( pos, "print function takes only one parameter" )
             println( args(0) );
             new UnitValue();
         } ) )
         
-        setVar( "toString", new BuiltInFunction( 1, args =>
+        setVar( "toString", new BuiltInFunction( 1, (pos, args) =>
         {
-            if ( args.length != 1 ) throw new TypeError( "toString function takes only one parameter" )
+            if ( args.length != 1 ) throw new TypeError( pos, "toString function takes only one parameter" )
             new StringValue( args(0).toString )
         } ) )
         
         setVar( "nil", new ListTerminatorValue() )
         
-        setVar( "head", new BuiltInFunction( 1, args =>
+        setVar( "head", new BuiltInFunction( 1, (pos, args) =>
         {
-            if ( args.length != 1 ) throw new TypeError( "head function takes only one parameter" )
+            if ( args.length != 1 ) throw new TypeError( pos, "head function takes only one parameter" )
             
             args(0) match
             {
                 case ListElementValue( head, tail ) => head
-                case ListTerminatorValue() => throw new TypeError( "Calling head on empty list" )
-                case _ => throw new TypeError( "Calling head on non-list type" )
+                case ListTerminatorValue() => throw new TypeError( pos, "Calling head on empty list" )
+                case _ => throw new TypeError( pos, "Calling head on non-list type" )
             }
         } ) )
         
-        setVar( "tail", new BuiltInFunction( 1, args =>
+        setVar( "tail", new BuiltInFunction( 1, (pos, args) =>
         {
-            if ( args.length != 1 ) throw new TypeError( "tail function takes only one parameter" )
+            if ( args.length != 1 ) throw new TypeError( pos, "tail function takes only one parameter" )
             
             args(0) match
             {
                 case ListElementValue( head, tail ) => tail
-                case ListTerminatorValue() => throw new TypeError( "Calling head on empty list" )
-                case _ => throw new TypeError( "Calling head on non-list type" )
+                case ListTerminatorValue() => throw new TypeError( pos, "Calling head on empty list" )
+                case _ => throw new TypeError( pos, "Calling head on non-list type" )
             }
         } ) )
     }
@@ -211,92 +205,92 @@ class ExecutionContext
 
 class ValueEvaluator
 {
-    def add( left : BaseValue, right : BaseValue ) =
+    def add( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new FloatValue(v1.value + v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value + v2.value)
             case (v1 : StringValue, v2 : StringValue) => new StringValue(v1.value + v2.value)
-            case _  => throw new TypeError( "Arguments to addition are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to addition are not of equal type" )
         }
     }
     
-    def subtract( left : BaseValue, right : BaseValue ) =
+    def subtract( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new FloatValue(v1.value - v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value - v2.value)
-            case _  => throw new TypeError( "Arguments to subtraction are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to subtraction are not of equal type" )
         }
     }
     
-    def multiply( left : BaseValue, right : BaseValue ) =
+    def multiply( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new FloatValue(v1.value * v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value * v2.value)
-            case _  => throw new TypeError( "Arguments to multiplication are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to multiplication are not of equal type" )
         }
     }
     
-    def divide( left : BaseValue, right : BaseValue ) =
+    def divide( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new FloatValue(v1.value / v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new IntegerValue(v1.value / v2.value)
-            case _  => throw new TypeError( "Arguments to division are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to division are not of equal type" )
         }
     }
     
-    def lt( left : BaseValue, right : BaseValue ) =
+    def lt( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new BooleanValue(v1.value < v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value < v2.value)
             case (v1 : StringValue, v2 : StringValue) => new BooleanValue(v1.value < v2.value)
-            case _  => throw new TypeError( "Arguments to < are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to < are not of equal type" )
         }
     }
     
-    def le( left : BaseValue, right : BaseValue ) =
+    def le( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new BooleanValue(v1.value <= v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value <= v2.value)
             case (v1 : StringValue, v2 : StringValue) => new BooleanValue(v1.value <= v2.value)
-            case _  => throw new TypeError( "Arguments to <= are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to <= are not of equal type" )
         }
     }
     
-    def gt( left : BaseValue, right : BaseValue ) =
+    def gt( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new BooleanValue(v1.value > v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value > v2.value)
             case (v1 : StringValue, v2 : StringValue) => new BooleanValue(v1.value > v2.value)
-            case _  => throw new TypeError( "Arguments to > are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to > are not of equal type" )
         }
     }
     
-    def ge( left : BaseValue, right : BaseValue ) =
+    def ge( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new BooleanValue(v1.value >= v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value >= v2.value)
             case (v1 : StringValue, v2 : StringValue) => new BooleanValue(v1.value >= v2.value)
-            case _  => throw new TypeError( "Arguments to >= are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to >= are not of equal type" )
         }
     }
     
-    def eq( left : BaseValue, right : BaseValue ) = new BooleanValue(left == right)
+    def eq( pos : Position, left : BaseValue, right : BaseValue ) = new BooleanValue(left == right)
     /*{
         (left, right) match
         {
@@ -308,14 +302,14 @@ class ValueEvaluator
     }*/
     
     
-    def ne( left : BaseValue, right : BaseValue ) =
+    def ne( pos : Position, left : BaseValue, right : BaseValue ) =
     {
         (left, right) match
         {
             case (v1 : FloatValue, v2 : FloatValue) => new BooleanValue(v1.value != v2.value)
             case (v1 : IntegerValue, v2 : IntegerValue) => new BooleanValue(v1.value != v2.value)
             case (v1 : StringValue, v2 : StringValue) => new BooleanValue(v1.value != v2.value)
-            case _  => throw new TypeError( "Arguments to != are not of equal type" )
+            case _  => throw new TypeError( pos, "Arguments to != are not of equal type" )
         }
     }
 }
@@ -325,7 +319,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
 {
     val evaluator = new ValueEvaluator()
     
-    def simplify( rawValue : BaseValue ) : BaseValue =
+    def simplify( pos : Position, rawValue : BaseValue ) : BaseValue =
     {
         rawValue match
         {
@@ -340,7 +334,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                         {
                             if ( numArgs == argList.length )
                             {
-                                fn( argList )
+                                fn( pos, argList )
                             }
                             else
                             {
@@ -368,7 +362,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                                 rawValue
                             }
                         }
-                        case _ => throw new TypeError( "Malformed application" )
+                        case _ => throw new TypeError( pos, "Malformed application" )
                     }
                 }
                 
@@ -444,6 +438,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
     
     def eval( expr : Expression ) : BaseValue =
     {
+        val pos = expr.pos
         expr match
         {
             case NullExpression()                   => new UnitValue()
@@ -456,7 +451,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                 {
                     case BooleanValue(false)    => lvalue
                     case BooleanValue(true)     => eval(right)
-                    case _                      => throw new TypeError( "Arguments to logical operators must be of boolean type" )
+                    case _                      => throw new TypeError( pos, "Arguments to logical operators must be of boolean type" )
                 }
             }
 
@@ -467,21 +462,21 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                 {
                     case BooleanValue(true)     => lvalue
                     case BooleanValue(false)    => eval(right)
-                    case _                      => throw new TypeError( "Arguments to logical operators must be of boolean type" )
+                    case _                      => throw new TypeError( pos, "Arguments to logical operators must be of boolean type" )
                 }
             }
             
-            case CmpLt( left, right )               => evaluator.lt( eval(left), eval(right) )
-            case CmpLe( left, right )               => evaluator.le( eval(left), eval(right) )
-            case CmpGt( left, right )               => evaluator.gt( eval(left), eval(right) )
-            case CmpGe( left, right )               => evaluator.ge( eval(left), eval(right) )
-            case CmpEq( left, right )               => evaluator.eq( eval(left), eval(right) )
-            case CmpNe( left, right )               => evaluator.ne( eval(left), eval(right) )
+            case CmpLt( left, right )               => evaluator.lt( pos, eval(left), eval(right) )
+            case CmpLe( left, right )               => evaluator.le( pos, eval(left), eval(right) )
+            case CmpGt( left, right )               => evaluator.gt( pos, eval(left), eval(right) )
+            case CmpGe( left, right )               => evaluator.ge( pos, eval(left), eval(right) )
+            case CmpEq( left, right )               => evaluator.eq( pos, eval(left), eval(right) )
+            case CmpNe( left, right )               => evaluator.ne( pos, eval(left), eval(right) )
             
-            case Addition( left, right )            => evaluator.add( eval(left), eval(right) )
-            case Subtraction( left, right )         => evaluator.subtract( eval(left), eval(right) )
-            case Multiplication( left, right )      => evaluator.multiply( eval(left), eval(right) )
-            case Division( left, right )            => evaluator.divide( eval(left), eval(right) )
+            case Addition( left, right )            => evaluator.add( pos, eval(left), eval(right) )
+            case Subtraction( left, right )         => evaluator.subtract( pos, eval(left), eval(right) )
+            case Multiplication( left, right )      => evaluator.multiply( pos, eval(left), eval(right) )
+            case Division( left, right )            => evaluator.divide( pos, eval(left), eval(right) )
             
             case ListAppend( left, right )          => new ListElementValue( eval(left), eval(right) )
             
@@ -489,7 +484,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
             {
                 val rhs = args match
                 {
-                    case Nil => simplify( eval(value) )
+                    case Nil => simplify( pos, eval(value) )
                     case _   => new FunctionValue( args, bindClosureLocals( args, value ) )
                 }
                 context.setVar( name, rhs )
@@ -499,7 +494,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
             case IdExpression( name )           => context.getVar(name).get
             case Apply( lhs, rhs )              =>
             {
-                simplify( new ApplicationValue( eval(lhs), eval(rhs) ) )
+                simplify( pos, new ApplicationValue( eval(lhs), eval(rhs) ) )
             }
             case ExprList( elements )               => elements.foldLeft(new UnitValue() : BaseValue)( (x, y) => eval(y) )
             case BlockScopeExpression( contents )   =>
@@ -516,7 +511,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                 {
                     case BooleanValue(true)     => eval(trueBranch)
                     case BooleanValue(false)    => eval(falseBranch)
-                    case _                      => throw new TypeError( "If expression condition is not of boolean type" )
+                    case _                      => throw new TypeError( pos, "If expression condition is not of boolean type" )
                 }
             }
         }

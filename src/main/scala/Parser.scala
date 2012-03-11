@@ -3,10 +3,20 @@ package org.seacourt.pacatoon
 import scala.util.parsing.combinator._
 import scala.util.parsing.input.Positional
 
+sealed abstract class ExprType
+
+case class Untyped extends ExprType
+case class TypeUnit extends ExprType
+case class TypeFloat extends ExprType
+case class TypeBoolean extends ExprType
+case class TypeInteger extends ExprType
+case class FunctionType( val argTypes : List[ExprType], val retType: ExprType ) extends ExprType
+
+
 
 sealed abstract class Expression extends Positional
 {
-    def exprType = new Untyped()
+    var exprType : ExprType = new Untyped()
 }
 
 case class NullExpression extends Expression
@@ -36,6 +46,46 @@ case class ExprList( val elements : List[Expression] ) extends Expression
 case class BlockScopeExpression( val contents : Expression ) extends Expression
 case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
 
+
+object DumpAST
+{
+    def apply( expr : Expression ) =
+    {
+        def rec( expr : Expression, indent : Int )
+        {
+            def pr( s : String ) = println( ("| "*indent) + s + " : " + expr.exprType.toString )
+            expr match
+            {
+                case NullExpression() => pr( "Null" )
+                case Constant(v) => pr( "Constant: " + v.toString )
+                case LogicalAnd(l, r) => pr( "LogicalAnd" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case LogicalOr(l, r) => pr( "Division" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case CmpLt(l, r) => pr( "CmpLt" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case CmpLe(l, r) => pr( "CmpLe" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case CmpGt(l, r) => pr( "CmpGt" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case CmpGe(l, r) => pr( "CmpGe" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case CmpEq(l, r) => pr( "CmpEq" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case CmpNe(l, r) => pr( "CmpNe" ); rec( l, indent+1 ); rec( r, indent+1 );
+                
+                case ListAppend(l, r) => pr( "ListAppend" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case Addition(l, r) => pr( "Addition" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case Subtraction(l, r) => pr( "Subtraction" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case Multiplication(l, r) => pr( "Multiplication" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case Division(l, r) => pr( "Division" ); rec( l, indent+1 ); rec( r, indent+1 );
+                
+                
+                case IdDefinition( id, args, value : Expression ) => pr( "IdDefinition " + id ); rec( value, indent+1 );
+                case Apply( l, r ) => pr( "Apply" ); rec( l, indent+1 ); rec( r, indent+1 );
+                case IdExpression( id ) => pr ( "Id: " + id )
+                case ExprList( elements ) => pr( "ExprList" ); elements.foreach( e => rec(e, indent+1) );
+                case BlockScopeExpression( contents ) => pr( "BlockScope" ); rec( contents, indent+1 );
+                case IfExpression( cond, trueBranch, falseBranch ) => pr("IfExpression"); rec(cond, indent+1); rec(trueBranch, indent+1); rec(falseBranch, indent+1);
+            }
+        }
+        
+        rec( expr, 0 )
+    }
+}
 
 class ParserError( msg : String ) extends RuntimeException(msg)
 
@@ -106,16 +156,21 @@ object CalculatorDSL extends RegexParsers with PackratParsers
             val isInteger = !lit.foldLeft(false)((x,y) => x || (y=='.'))
             if ( isInteger )
             {
-                new Constant( new IntegerValue(lit.toInt) )
+                val c = new Constant( new IntegerValue(lit.toInt) )
+                c.exprType = new TypeInteger()
+                c
             }
             else
             {
-                new Constant( new FloatValue(lit.toDouble) )
+                val c = new Constant( new FloatValue(lit.toDouble) )
+                c.exprType = new TypeFloat()
+                c
             }
         } 
     })
     
     lazy val stringLit : Parser[Expression] = positioned(stringLiteral ^^ { str => new Constant( new StringValue( str.drop(1).dropRight(1) ) ) })
+
  
     lazy val defn : Parser[Expression] = positioned("@def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
         case "@def" ~ id ~ args ~ "=" ~ e => new IdDefinition( id, args, e )
