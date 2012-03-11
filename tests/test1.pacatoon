@@ -1,9 +1,20 @@
+// TODO:
+// * Get import working
+// * Sort out semi-colon fussiness
+// * Unit test operator (etc) precedence
+//
+// * Sort syntax for explicit type annotation
+// * Type inference/propagation
+//
+// * AST simplification for LLVM output
+// * FFI
+//
+// * Threading?
+
 @def map fn l =
 {
     @if (l == nil) nil
     @else (fn (head l)) :: (map fn (tail l))
-    
-    
 };
 
 @def foldLeft fn acc l =
