@@ -11,6 +11,9 @@
 //
 // * Threading?
 
+
+//@import "tests/stdlib.pacatoon"
+
 @def map fn l =
 {
     @if (l == nil) nil

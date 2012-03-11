@@ -4,10 +4,5 @@
     @else (fn (head l)) :: (map fn (tail l))
 };
 
-@def foldLeft fn acc l =
-{
-    @if (l == nil) acc
-    @else (fn (head l) (foldLeft fn acc (tail l)))
-};
 
 
