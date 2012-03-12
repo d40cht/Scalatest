@@ -477,7 +477,10 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 }
             }
             
-            case TypeAnnotation( name, typeNames )              => new UnitValue()
+            case TypeAnnotation( name, typeNames )                          => new UnitValue()
+            case VariantClauseDefinition( name, elementTypes )              => new UnitValue()
+            case VariantTypeDefinition( clauses )                           => new UnitValue()
+            case TypeDefinition( typeName, typeParameters, instanceType )   => new UnitValue()
         }
     }
 }

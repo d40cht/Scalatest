@@ -275,17 +275,67 @@ class CalculatorParseTest extends FunSuite
     {
         // Return types should be inferred. Only parameter types are required
         assert( exec[FloatValue](
-            "@def sum :: float -> float -> float;" +
-            "@def sum a b = a + b;" +
-            "@def p = 12.0;" +
-            "@def q = 13.0;" +
-            "@def res = sum p q;" +
-            "res", dump=true, checkTypes=true
-        ).value === 25.0 )
-        
+            "@def sum :: float -> float -> float;\n" +
+            "@def sum a b = a + b;\n" +
+            "@def p = 12.0;\n" +
+            "@def q = 13.0;\n" +
+            "@def fn = sum;\n" +
+            "@def partial = sum 12.0;\n" +
+            "@def res = (sum p q) + (partial 100.0);\n" +
+            "res", checkTypes=true
+        ).value === 137.0 )
+    }
+     
+    test( "Generic function type annotation" )
+    {   
+        assert( exec[FloatValue](
+            "@def unit :: a -> a;\n" +
+            "@def unit x = x;\n" +
+            "unit 10;\n" +
+            "unit \"Hello\";\n" +
+            "unit 12.0", checkTypes=true
+        ).value == 12.0 )
+
         //"@def ::[T] (a:T) (l:List[T]) = cons( a, l )"
         //"@def sort :: Ord a => [a] -> [a]"
         //"@def head :: [a] -> a"
+    }
+    
+    
+    /*test( "Simple map function with static typing" )
+    {
+        assert( exec[FloatValue](
+            "@def map :: (a -> b) -> (List a) -> (List b);\n" +
+            "12.0",
+            //"map (@def _ x=>x*x) (4::3::2::1::0)"
+            dump=true, checkTypes=true
+        ).value == 12.0 )
+    }*/
+    
+    test( "Simple variant type" )
+    {
+        /*assert( exec[FloatValue](
+            "@type ListElement a = Terminal | Cons a (ListElement a);"
+            "12.0", dump=true, checkTypes=true
+        ).value == 12.0 )*/
+        
+        assert( exec[FloatValue](
+            "@type FloatList = Terminal | Cons float FloatList;\n" +
+            /*
+            // Build the types so the variant clauses point to the parent type
+            // Implement making the variant clauses by populating the fn symbol table
+            //   with ctor fns
+            "@def a = Terminal;\n" +
+            "@def b = Cons 4.0 Terminal;\n" +
+            "@def c = Const 5.0 (Cons 4.0 Terminal);\n" +
+            "@def headOrZero :: FloatList -> float;\n" +
+            
+            // Pattern matching?
+            "@def headOrZero v = @match v { case Terminal -> 0.0; case Cons v -> v };\n" +
+            "headOrZero c",*/
+            "5.0",
+            dump=true, checkTypes=true
+        ).value == 5.0 )
     }
     
     /*test("Record type")

@@ -11,10 +11,21 @@ case class TypeUnit extends ExprType
 case class TypeFloat extends ExprType
 case class TypeBoolean extends ExprType
 case class TypeInteger extends ExprType
+case class TypeString extends ExprType
 
 case class FunctionType( val argTypes : List[ExprType], val retType: ExprType ) extends ExprType
 
-case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
+object GenericType
+{
+    var lastId = 0
+}
+
+case class GenericType( id : Int = GenericType.lastId ) extends ExprType
+{
+    GenericType.lastId += 1
+}
+
+//case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
 
 // Need to implement typing for lists using variant types. 'ListType'[T]{ 'nil' => TypeUnit, 'cons' => TypeTuple[T]( T, ListType[T] ) }
 //
@@ -58,6 +69,10 @@ case class IfExpression( val cond : Expression, val trueBranch : Expression, val
 
 case class TypeAnnotation( val name : String, val typeNames : List[String] ) extends Expression
 
+case class VariantClauseDefinition( clauseName : String, elementTypeNames : List[String] ) extends Expression
+case class VariantTypeDefinition( clauses : List[VariantClauseDefinition] ) extends Expression
+case class TypeDefinition( typeName : String, typeParameters : List[String], instanceType : VariantTypeDefinition ) extends Expression
+
 trait ASTVisitor
 {
     def before( expr : Expression ) {}
@@ -99,6 +114,10 @@ object VisitAST
                 case BlockScopeExpression( contents )               => rec( contents )
                 case IfExpression( cond, trueBranch, falseBranch )  => rec(cond); rec(trueBranch); rec(falseBranch);
                 case TypeAnnotation( name, typeNames )              =>
+                
+                case VariantClauseDefinition( name, elementTypes )              =>
+                case VariantTypeDefinition( clauses )                           => clauses.foreach( c => rec(c) );
+                case TypeDefinition( typeName, typeParameters, instanceType )   => rec(instanceType);
             }
             visitor.after(expr)
         }
@@ -144,7 +163,11 @@ object DumpAST
                     case ExprList( elements )                           => pr( "ExprList" )
                     case BlockScopeExpression( contents )               => pr( "BlockScope" )
                     case IfExpression( cond, trueBranch, falseBranch )  => pr("IfExpression")
+                    
                     case TypeAnnotation( name, typeNames )              => pr( "TypeAnnotation " + name + " : " + typeNames.mkString( " -> " ) )
+                    case VariantClauseDefinition( name, elementTypes )              => pr( "VariantClause " + name + " : " + elementTypes.mkString( " " ) )
+                    case VariantTypeDefinition( clauses )                           => 
+                    case TypeDefinition( typeName, typeParameters, instanceType )   => pr( "TypeDefinition " + typeName + " : " + typeParameters.mkString( " " ) );
                 }
                 indent += 1
             }
@@ -174,7 +197,12 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     
     def buildApply( initial : Expression, terms : List[Expression] ) =
     {
-        terms.foldLeft( initial )( (lhs, rhs) => new Apply( lhs, rhs ) )
+        terms.foldLeft( initial )( (lhs, rhs) =>
+        {
+            val app = new Apply( lhs, rhs )
+            app.setPos(lhs.pos)
+            app
+        } )
     }
     
     lazy val expr : Parser[Expression] = positioned(term4 ~ ((term4)*) ^^ {
@@ -218,7 +246,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     
     lazy val idExpression : Parser[Expression] = positioned(ident ^^ { x => new IdExpression(x) })
     
-    lazy val factor: Parser[Expression] = positioned(blockScope | controlFlow | typeAnnotation | defn | fpLit | stringLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e })
+    lazy val factor: Parser[Expression] = positioned(blockScope | controlFlow | typeAnnotation | typeDefn | defn | fpLit | stringLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e })
     
     lazy val fpLit : Parser[Expression] = positioned(floatingPointNumber ^^ 
     {
@@ -240,7 +268,14 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         } 
     })
     
-    lazy val stringLit : Parser[Expression] = positioned(stringLiteral ^^ { str => new Constant( new StringValue( str.drop(1).dropRight(1) ) ) })
+    lazy val stringLit : Parser[Expression] = positioned(stringLiteral ^^ {
+        str =>
+        {
+            val c = new Constant( new StringValue( str.drop(1).dropRight(1) ) )
+            c.exprType = new TypeString()
+            c
+        }
+    })
  
     lazy val defn : Parser[Expression] = positioned("@def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
         case "@def" ~ id ~ params ~ "=" ~ e => new IdDefinition( id, params, e )
@@ -249,6 +284,21 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     lazy val typeAnnotation : Parser[Expression] = positioned("@def" ~ ident ~ "::" ~ ident ~ (("->" ~> ident)*) ^^ {
         case "@def" ~ id ~ "::" ~ type1 ~ remainingTypes => new TypeAnnotation( id, type1 :: remainingTypes )
     })
+    
+    lazy val variantClause : Parser[VariantClauseDefinition] = positioned(ident ~ (ident*) ^^
+    {
+        case clauseName ~ elementTypeNames => new VariantClauseDefinition( clauseName, elementTypeNames )
+    })
+    
+    lazy val variantTypeDefn : Parser[VariantTypeDefinition] = positioned(variantClause ~ (("|" ~> variantClause)*) ^^
+    {
+        case firstAlternative ~ otherAlternatives => new VariantTypeDefinition( firstAlternative ::otherAlternatives)
+    })
+    
+    lazy val typeDefn : Parser[Expression] = positioned("@type" ~ ident ~ ((ident)*) ~ "=" ~ variantTypeDefn ^^
+    {
+        case "@type" ~ typeName ~ typeParameters ~ "=" ~ instanceType => new TypeDefinition( typeName, typeParameters, instanceType )
+    } )
     
     lazy val topLevel = positioned(comment | expr ^^ { x => x })
     

@@ -53,6 +53,7 @@ object buTypeAST
                             val idType = idTypes.get(id)
                             
                             // The visit from here will be into the body of the function, so set param types
+                            // up for the call and inference within the implementation.
                             idType match
                             {
                                 case Some(FunctionType( paramTypes, returnType )) =>
@@ -66,17 +67,24 @@ object buTypeAST
                             }
                         }
                     }
+                    
                     case TypeAnnotation( name, annotationTypeNames )    =>
                     {
-                        val paramTypes = annotationTypeNames.map( n => typeNames.get(n) match
+                        typeNames.push()
+                        val paramTypes = annotationTypeNames.map( typeName => typeNames.get(typeName) match
                         {
                             case Some(exprType) => exprType
-                            case None => throw new TypeError( expr.pos, "Unknown type name: " + n )
+                            case None =>
+                            {
+                                // Assume this is a generic type parameter
+                                val generic = new GenericType()
+                                typeNames.set( typeName, generic )
+                                generic
+                            }
                         } )
                         val fnType = new FunctionType( paramTypes.dropRight(1), paramTypes.last )
                         
-                        println( name, fnType )
-                        
+                        typeNames.pop()
                         idTypes.set( name, fnType )
                     }
                     case _                                              =>
@@ -119,11 +127,27 @@ object buTypeAST
                         {
                             case FunctionType( paramTypes, returnType ) =>
                             {
-                                assert( l == paramTypes.
+                                if ( paramTypes == Nil ) returnType
+                                else
+                                {
+                                    val thisType = paramTypes.head
+                                    thisType match
+                                    {
+                                        case GenericType(id)    =>
+                                        {
+                                            def replaceGeneric( x : ExprType ) = if ( x==thisType) r.exprType else x
+                                            new FunctionType( paramTypes.tail.map( x => replaceGeneric(x) ), replaceGeneric( returnType ) )
+                                        }
+                                        case _                  =>
+                                        {
+                                            if ( r.exprType != thisType ) throw new TypeError( expr.pos, "Invalid function argument" )
+                                            else new FunctionType( paramTypes.tail, returnType )
+                                        }
+                                    }
+                                }
                             }
                             case _ => throw new TypeError( expr.pos, "Function application on invalid type" )
                         }
-                        //typeUnion( expr.pos, l.exprType, r.exprType )
                     }
                     case IdExpression( id )                             =>
                     {
@@ -142,6 +166,10 @@ object buTypeAST
                     }
                     case IfExpression( cond, trueBranch, falseBranch )  => typeUnion( expr.pos, trueBranch.exprType, falseBranch.exprType )
                     case TypeAnnotation( name, typeNames )              => new TypeUnit()
+                    
+                    case VariantClauseDefinition( name, elementTypes )              => new TypeUnit()
+                    case VariantTypeDefinition( clauses )                           => new TypeUnit()
+                    case TypeDefinition( typeName, typeParameters, instanceType )   => new TypeUnit()
                 }
                 
                 expr.exprType = newType
