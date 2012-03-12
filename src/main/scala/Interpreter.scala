@@ -4,10 +4,6 @@ package org.seacourt.pacatoon
 import scala.collection.{mutable, immutable}
 import scala.util.parsing.input.{Position, NoPosition}
 
-
-
-
-
 sealed abstract class BaseValue
 {
     def toString : String
@@ -83,24 +79,13 @@ class TypeError( _position : Position, _msg : String ) extends PositionedExcepti
 class VariableNotFoundError( _position : Position, _msg : String ) extends PositionedException(_position, _msg)
 class AssertionFailure( _position : Position, _msg : String ) extends PositionedException(_position, _msg)
 
-class VarHolder
-{
-    var varValues = new immutable.HashMap[String, BaseValue]()
-    
-    def setVar( id : String, value : BaseValue )
-    {
-        varValues += id -> value
-    }
-    def getVar( id : String ) = varValues.get(id)
-}
 
-class ExecutionContext
+
+class ValueExecutionContext extends ExecutionContextBase( () => new ContextFrame[BaseValue]() )
 {
-    var varStack = List( new VarHolder() )
-    
     // Add built-ins
     {
-        setVar( "import", new BuiltInFunction( 1, (pos, args) =>
+        set( "import", new BuiltInFunction( 1, (pos, args) =>
         {
             if ( args.length != 1 ) throw new TypeError( pos, "import function takes only one parameter" )
             
@@ -121,7 +106,7 @@ class ExecutionContext
             new UnitValue();
         } ) )
         
-        setVar( "assertEqual", new BuiltInFunction( 2, (pos, args) =>
+        set( "assertEqual", new BuiltInFunction( 2, (pos, args) =>
         {
             if ( args.length != 2 ) throw new TypeError( pos, "assertEqual function takes two parameters" )
             val (a, b) = (args(0), args(1))
@@ -136,22 +121,22 @@ class ExecutionContext
             new UnitValue();
         } ) )
         
-        setVar( "print", new BuiltInFunction( 1, (pos, args) =>
+        set( "print", new BuiltInFunction( 1, (pos, args) =>
         {
             if ( args.length != 1 ) throw new TypeError( pos, "print function takes only one parameter" )
             println( args(0) );
             new UnitValue();
         } ) )
         
-        setVar( "toString", new BuiltInFunction( 1, (pos, args) =>
+        set( "toString", new BuiltInFunction( 1, (pos, args) =>
         {
             if ( args.length != 1 ) throw new TypeError( pos, "toString function takes only one parameter" )
             new StringValue( args(0).toString )
         } ) )
         
-        setVar( "nil", new ListTerminatorValue() )
+        set( "nil", new ListTerminatorValue() )
         
-        setVar( "head", new BuiltInFunction( 1, (pos, args) =>
+        set( "head", new BuiltInFunction( 1, (pos, args) =>
         {
             if ( args.length != 1 ) throw new TypeError( pos, "head function takes only one parameter" )
             
@@ -163,7 +148,7 @@ class ExecutionContext
             }
         } ) )
         
-        setVar( "tail", new BuiltInFunction( 1, (pos, args) =>
+        set( "tail", new BuiltInFunction( 1, (pos, args) =>
         {
             if ( args.length != 1 ) throw new TypeError( pos, "tail function takes only one parameter" )
             
@@ -174,32 +159,6 @@ class ExecutionContext
                 case _ => throw new TypeError( pos, "Calling head on non-list type" )
             }
         } ) )
-    }
-    
-    def push()
-    {
-        varStack = new VarHolder() :: varStack
-    }
-    
-    def pop()
-    {
-        varStack = varStack.tail
-    }
-    
-    def setVar( id : String, value : BaseValue ) = { varStack.head.setVar( id, value ) }
-    def getVar( id : String ) =
-    {
-        def getRec( id : String, stack : List[VarHolder] ) : Option[BaseValue] = stack.head.getVar(id) match
-        {
-            case Some(value) => Some(value)
-            case _ =>
-            {
-                if (stack.tail == Nil) None
-                else getRec( id, stack.tail )
-            }
-        }
-        
-        getRec( id, varStack )
     }
 }
 
@@ -315,7 +274,7 @@ class ValueEvaluator
 }
 
 
-class DynamicASTEvaluator( val context : ExecutionContext )
+class DynamicASTEvaluator( val context : ValueExecutionContext )
 {
     val evaluator = new ValueEvaluator()
     
@@ -350,7 +309,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                                 {
                                     case (p, a) =>
                                     {
-                                        context.setVar( p, a )
+                                        context.set( p, a )
                                     }
                                 }
                                 val res = eval( body )
@@ -378,7 +337,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
     {
         context.push()
         // Any variables with the same name as function params must not be bound to outer scopes
-        paramNames.foreach( param => context.setVar( param, new UnitValue() ) )
+        paramNames.foreach( param => context.set( param, new UnitValue() ) )
         
         def bindRec( expr : Expression ) : Expression =
         {
@@ -404,7 +363,7 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                 case IdDefinition( name, args, value )  => new IdDefinition( name, args, bindRec( value ) )
                 case IdExpression( name )               =>
                 {
-                    val res = context.getVar(name)
+                    val res = context.get(name)
                     res match
                     {
                         case None               => expr
@@ -423,9 +382,12 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                     new BlockScopeExpression( res )
                 }
                 case IfExpression( cond, trueBranch, falseBranch )  => new IfExpression( bindRec(cond), bindRec(trueBranch), bindRec(falseBranch) )
+                case TypeAnnotation( name, typeNames )              => expr
             }
             
             res.setPos( expr.pos )
+            res.exprType = expr.exprType
+            
             res
         }
         
@@ -480,18 +442,18 @@ class DynamicASTEvaluator( val context : ExecutionContext )
             
             case ListAppend( left, right )          => new ListElementValue( eval(left), eval(right) )
             
-            case IdDefinition( name, args, value )  =>
+            case IdDefinition( name, params, value )  =>
             {
-                val rhs = args match
+                val rhs = params match
                 {
                     case Nil => simplify( pos, eval(value) )
-                    case _   => new FunctionValue( args, bindClosureLocals( args, value ) )
+                    case _   => new FunctionValue( params, bindClosureLocals( params, value ) )
                 }
-                context.setVar( name, rhs )
+                context.set( name, rhs )
                 
                 rhs
             }
-            case IdExpression( name )           => context.getVar(name).get
+            case IdExpression( name )           => context.get(name).get
             case Apply( lhs, rhs )              =>
             {
                 simplify( pos, new ApplicationValue( eval(lhs), eval(rhs) ) )
@@ -514,6 +476,8 @@ class DynamicASTEvaluator( val context : ExecutionContext )
                     case _                      => throw new TypeError( pos, "If expression condition is not of boolean type" )
                 }
             }
+            
+            case TypeAnnotation( name, typeNames )              => new UnitValue()
         }
     }
 }

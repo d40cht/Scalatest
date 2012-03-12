@@ -10,7 +10,8 @@ object TestRunner extends Application
         val str = file.mkString
         file.close()
         val parsed = CalculatorDSL.parse( str )
-        val execContext = new ExecutionContext()
+        //buTypeAST( parsed )
+        val execContext = new ValueExecutionContext()
         val evaluator = new DynamicASTEvaluator( execContext )
         evaluator.eval( parsed )
     }

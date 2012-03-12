@@ -5,11 +5,12 @@ import org.seacourt.pacatoon._
 
 class CalculatorParseTest extends FunSuite
 {
-    def exec[T]( str : String, dump : Boolean = false ) =
+    def exec[T]( str : String, dump : Boolean = false, checkTypes : Boolean = false ) =
     {
         val parsed = CalculatorDSL.parse( str )
+        if (checkTypes) buTypeAST( parsed )
         if (dump) DumpAST( parsed )
-        val execContext = new ExecutionContext()
+        val execContext = new ValueExecutionContext()
         val evaluator = new DynamicASTEvaluator( execContext )
         
         evaluator.eval( parsed ).asInstanceOf[T]
@@ -72,7 +73,7 @@ class CalculatorParseTest extends FunSuite
             "@def x = 12.0;" +
             "@def y = 13.0;" +
             "@def ret = 0.0;" +
-            "@if ( x < y ) { 4.0 } @else { 5.0 }", dump=true
+            "@if ( x < y ) { 4.0 } @else { 5.0 }"
         ).value === 4.0 )    
     }
     
@@ -109,7 +110,7 @@ class CalculatorParseTest extends FunSuite
         ).value === 8.0 )
     }
      
-    test("Partial application syntax(sort of)")
+    test("Partial application syntax (sort of)")
     {
         assert( exec[FloatValue]( 
             "@def sum x y = x + y;" +
@@ -268,29 +269,24 @@ class CalculatorParseTest extends FunSuite
             "};" +
             "@def mergePairsRec l = @if ((tail l) == nil) (head l) @else (mergePairsRec (mergePairs l));" +
             "mergePairsRec elsAsLists" ).toString === "(0.0::1.0::2.0::3.0::4.0::5.0::6.0::nil)" )
-            
-            
-        
-        /*val splitFn =
-            "@def split l l1 l2=" +
-            "{" +
-            "    @if ( l == nil ) l1 :: l2 :: nil
-            "    @if ( (l != nil) && ((tail l) != nil) ) split (tail (tail l)) (head l) (head (tail l))" +
-            "    @else @if ( */
     }
     
-    
-    /*<<mergesort>>=
-        let rec mergesort compare = 
-	        split
-          in
-	        merge
-	        in function
-          | ([] | [_]) as l -> l
-          | l ->  let left,right = split l in 
-                  merge compare (mergesort compare left) (mergesort compare right)
-        ;;
-    */
+    test( "Type annotations" )
+    {
+        // Return types should be inferred. Only parameter types are required
+        assert( exec[FloatValue](
+            "@def sum :: float -> float -> float;" +
+            "@def sum a b = a + b;" +
+            "@def p = 12.0;" +
+            "@def q = 13.0;" +
+            "@def res = sum p q;" +
+            "res", dump=true, checkTypes=true
+        ).value === 25.0 )
+        
+        //"@def ::[T] (a:T) (l:List[T]) = cons( a, l )"
+        //"@def sort :: Ord a => [a] -> [a]"
+        //"@def head :: [a] -> a"
+    }
     
     /*test("Record type")
     {
