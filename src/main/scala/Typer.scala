@@ -135,7 +135,7 @@ object buTypeAST
                                     {
                                         case GenericType(id)    =>
                                         {
-                                            def replaceGeneric( x : ExprType ) = if ( x==thisType) r.exprType else x
+                                            def replaceGeneric( x : ExprType ) = if (x==thisType) r.exprType else x
                                             new FunctionType( paramTypes.tail.map( x => replaceGeneric(x) ), replaceGeneric( returnType ) )
                                         }
                                         case _                  =>
@@ -167,9 +167,28 @@ object buTypeAST
                     case IfExpression( cond, trueBranch, falseBranch )  => typeUnion( expr.pos, trueBranch.exprType, falseBranch.exprType )
                     case TypeAnnotation( name, typeNames )              => new TypeUnit()
                     
-                    case VariantClauseDefinition( name, elementTypes )              => new TypeUnit()
-                    case VariantTypeDefinition( clauses )                           => new TypeUnit()
-                    case TypeDefinition( typeName, typeParameters, instanceType )   => new TypeUnit()
+                    // case class VariantClauseType( val name : String, val exprType : ExprType, val enum : Int ) extends ExprType
+                    // case class VariantType( val variants : List[VariantClauseType] ) extends ExprType
+                    case VariantClauseDefinition( name, elementTypeNames )          =>
+                    {
+                        // TODO: Add constructor fn into var symbols
+                        println( elementTypeNames )
+                        new VariantClauseType( name, elementTypeNames.map( tn => typeNames.get(tn).get ), 0 )
+                    }
+                    case VariantTypeDefinition( clauses )                           =>
+                    {
+                        // Remove isInstanceOf vileness
+                        new VariantType( clauses.map( _.exprType.asInstanceOf[VariantClauseType] ) )
+                    }
+                    
+                    case TypeDefinition( typeName, typeParameters, instanceType )   =>
+                    {
+                        // TODO: Add type parameters into type symbols in before to handle generics
+                        // Add type into type symbols
+                        typeNames.set( typeName, instanceType.exprType )
+                        
+                        new TypeUnit()
+                    }
                 }
                 
                 expr.exprType = newType

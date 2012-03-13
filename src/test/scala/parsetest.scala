@@ -319,15 +319,22 @@ class CalculatorParseTest extends FunSuite
             "12.0", dump=true, checkTypes=true
         ).value == 12.0 )*/
         
+        
+        // Use cases:
+        // * Create a variant by name - add each Ctor to the in-scope vars
+        // * Infer types from the variant - should work similarly to fn type inference
+        // * Create variant values in the interpreter, with an enum to distinguish
+        // * Simple pattern matching on enum with appropriate syntax
         assert( exec[FloatValue](
-            "@type FloatList = Terminal | Cons float FloatList;\n" +
+            //"@type FloatList = Terminal | Cons float FloatList;\n" +
+            "@type FloatOption = None | Some float;\n" +
             /*
             // Build the types so the variant clauses point to the parent type
             // Implement making the variant clauses by populating the fn symbol table
             //   with ctor fns
             "@def a = Terminal;\n" +
             "@def b = Cons 4.0 Terminal;\n" +
-            "@def c = Const 5.0 (Cons 4.0 Terminal);\n" +
+            "@def c = Cons 5.0 (Cons 4.0 Terminal);\n" +
             "@def headOrZero :: FloatList -> float;\n" +
             
             // Pattern matching?

@@ -30,7 +30,8 @@ case class GenericType( id : Int = GenericType.lastId ) extends ExprType
 // Need to implement typing for lists using variant types. 'ListType'[T]{ 'nil' => TypeUnit, 'cons' => TypeTuple[T]( T, ListType[T] ) }
 //
 // Start with option type
-case class VariantType( val variants : immutable.HashMap[String, ExprType] ) extends ExprType
+case class VariantClauseType( val name : String, val elTypes : List[ExprType], val enum : Int ) extends ExprType
+case class VariantType( val variants : List[VariantClauseType] ) extends ExprType
 
 
 
