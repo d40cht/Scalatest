@@ -71,6 +71,11 @@ case class ListElementValue( val el : BaseValue, val next : BaseValue ) extends 
     }
 }
 
+class VariantValue( val els : List[BaseValue] ) extends BaseValue
+{
+    override def toString = "Variant: " + els
+}
+
 
 
 class PositionedException( position : Position, msg : String ) extends RuntimeException( "("+position.line+", "+position.column+"): " + msg )
@@ -478,9 +483,29 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
             }
             
             case TypeAnnotation( name, typeNames )                          => new UnitValue()
-            case VariantClauseDefinition( name, elementTypes )              => new UnitValue()
-            case VariantTypeDefinition( clauses )                           => new UnitValue()
-            case TypeDefinition( typeName, typeParameters, instanceType )   => new UnitValue()
+            
+            // Build a function to generate a VariantValue
+            case VariantClauseDefinition( name, elementTypes )              =>
+            {
+                val numParams = elementTypes.length
+                context.set( name, new BuiltInFunction( numParams, (pos, args) =>
+                {
+                    if ( args.length != numParams ) throw new TypeError( pos, "Variant ctor " + name + " takes " + numParams + " arguments" )
+                    new VariantValue( args )
+                } ) )
+                
+                new UnitValue()
+            }
+            case VariantTypeDefinition( clauses )                           =>
+            {
+                clauses.map( x => eval(x) )
+                new UnitValue()
+            }
+            case TypeDefinition( typeName, typeParameters, instanceType )   =>
+            {
+                eval(instanceType)
+                new UnitValue()
+            }                
         }
     }
 }

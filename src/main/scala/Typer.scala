@@ -161,6 +161,7 @@ object buTypeAST
                                         }
                                         case _                  =>
                                         {
+                                            println( r.exprType, thisType )
                                             if ( r.exprType != thisType ) throw new TypeError( expr.pos, "Invalid function argument" )
                                             else new FunctionType( paramTypes.tail, returnType )
                                         }
@@ -201,11 +202,21 @@ object buTypeAST
                     }
                     case VariantTypeDefinition( clauses )                           =>
                     {
-                        // Remove isInstanceOf vileness
-                        new VariantType( clauses.map( _.exprType.asInstanceOf[VariantClauseType] ).zipWithIndex.map {
+                        // Remove asInstanceOf vileness
+                        val variantType = new VariantType( clauses.map( _.exprType.asInstanceOf[VariantClauseType] ).zipWithIndex.map {
                             // Re-map enums. Also not very nice.
-                            case (x, i ) => new VariantClauseType( x.name, x.elTypes, i )
+                            case (x, i) =>
+                            {
+                                new VariantClauseType( x.name, x.elTypes, i )
+                            }
                         } )
+                        
+                        for ( clause <- variantType.variants )
+                        {
+                            idTypes.set( clause.name, new FunctionType( clause.elTypes, variantType ) )
+                        }
+                        
+                        variantType
                     }
                     
                     case TypeDefinition( typeName, typeParameters, instanceType )   =>

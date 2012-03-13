@@ -336,23 +336,22 @@ class CalculatorParseTest extends FunSuite
             "@def t3 = None;\n" +
             "@def t4 = Some 13;\n" +
             
+            // Variant with self-reference/recursion
+            "@type FloatList = FloatTerminal | FloatCons float FloatList;\n" +
+            "@def t5 = FloatTerminal;\n" +
+            "@def t6 = FloatCons 3.0 FloatTerminal;\n" +
+            "@def t7 = FloatCons 4.0 (FloatCons 3.0 FloatTerminal);\n" +
+            
             // Variant with generic types and self-reference/recursion
             "@type List a = Terminal | Cons a List;\n" +
-            "@def t5 = Terminal;\n" +
-            "@def t6 = Cons 3.0 Terminal;\n"
-            "@def t7 = Cons 3.0 (Cons 4.0 (Cons 5.0 Terminal);\n" +
-            //"@def t7 = Cons 3.0 $ Cons 4.0 $ Cons 5.0 Terminal;\n" +
-            
-            /*
-            // Build the types so the variant clauses point to the parent type
-            // Implement making the variant clauses by populating the fn symbol table
-            //   with ctor fns
-            "@def a = Terminal;\n" +
-            "@def b = Cons 4.0 Terminal;\n" +
-            "@def c = Cons 5.0 (Cons 4.0 Terminal);\n" +
-            "@def headOrZero :: FloatList -> float;\n" +
+            "@def t8 = Terminal;\n" +
+            //"@def t9 = Cons 3.0 Terminal;\n" +
+            //"@def t10 = Cons 3.0 (Cons 4.0 (Cons 5.0 Terminal));\n" +
+            //"print t10;" +
+            //"@def t11 = Cons 3.0 $ Cons 4.0 $ Cons 5.0 Terminal;\n" +
             
             // Pattern matching?
+            /*"@def headOrZero :: FloatList -> float;\n" +
             "@def headOrZero v = @match v { case Terminal -> 0.0; case Cons v -> v };\n" +
             "headOrZero c",*/
             "5.0",
