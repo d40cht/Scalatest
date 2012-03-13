@@ -91,7 +91,7 @@ object buTypeAST
                     case TypeDefinition( typeName, typeParameters, instanceType )   =>
                     { 
                         // Add this name as a pending generic type
-                        typeNames.set( typeName, new WeakTypeReference() )
+                        typeNames.set( typeName, new WeakTypeReference(typeName) )
                         
                         // Register any generic parameter names
                         typeNames.push()

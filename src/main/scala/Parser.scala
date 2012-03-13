@@ -25,7 +25,10 @@ case class GenericType( id : Int = GenericType.lastId ) extends ExprType
     GenericType.lastId += 1
 }
 
-case class WeakTypeReference( var destType : ExprType = new Untyped() ) extends ExprType
+case class WeakTypeReference( val destName : String, var destType : ExprType = new Untyped() ) extends ExprType
+{
+    override def toString = "WeakTypeReference : " + destName
+}
 
 //case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
 
@@ -169,7 +172,7 @@ object DumpAST
                     
                     case TypeAnnotation( name, typeNames )              => pr( "TypeAnnotation " + name + " : " + typeNames.mkString( " -> " ) )
                     case VariantClauseDefinition( name, elementTypes )              => pr( "VariantClause " + name + " : " + elementTypes.mkString( " " ) )
-                    case VariantTypeDefinition( clauses )                           => 
+                    case VariantTypeDefinition( clauses )                           => pr( "VariantTypeDefinition" )
                     case TypeDefinition( typeName, typeParameters, instanceType )   => pr( "TypeDefinition " + typeName + " : " + typeParameters.mkString( " " ) );
                 }
                 indent += 1

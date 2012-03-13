@@ -328,12 +328,21 @@ class CalculatorParseTest extends FunSuite
         assert( exec[FloatValue](
             // Simple non-generic variant
             "@type FloatOption = NoneF | SomeF float;\n" +
+            "@def t1 = NoneF;\n" +
+            "@def t2 = SomeF 12.0;\n" +
             
             // Variant with generic types
             "@type Option a = None | Some a;\n" +
+            "@def t3 = None;\n" +
+            "@def t4 = Some 13;\n" +
             
             // Variant with generic types and self-reference/recursion
             "@type List a = Terminal | Cons a List;\n" +
+            "@def t5 = Terminal;\n" +
+            "@def t6 = Cons 3.0 Terminal;\n"
+            "@def t7 = Cons 3.0 (Cons 4.0 (Cons 5.0 Terminal);\n" +
+            //"@def t7 = Cons 3.0 $ Cons 4.0 $ Cons 5.0 Terminal;\n" +
+            
             /*
             // Build the types so the variant clauses point to the parent type
             // Implement making the variant clauses by populating the fn symbol table
