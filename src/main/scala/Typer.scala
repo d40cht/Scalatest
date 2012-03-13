@@ -87,6 +87,27 @@ object buTypeAST
                         typeNames.pop()
                         idTypes.set( name, fnType )
                     }
+                    
+                    case TypeDefinition( typeName, typeParameters, instanceType )   =>
+                    { 
+                        // Add this name as a pending generic type
+                        typeNames.set( typeName, new WeakTypeReference() )
+                        
+                        // Register any generic parameter names
+                        typeNames.push()
+                        
+                        val paramTypes = typeParameters.map( tn => typeNames.get(tn) match
+                        {
+                            case None =>
+                            {
+                                // Assume this is a generic type parameter
+                                val generic = new GenericType()
+                                typeNames.set( tn, generic )
+                                generic
+                            }
+                            case _ =>
+                        } )
+                    }
                     case _                                              =>
                 }
             }
@@ -167,25 +188,34 @@ object buTypeAST
                     case IfExpression( cond, trueBranch, falseBranch )  => typeUnion( expr.pos, trueBranch.exprType, falseBranch.exprType )
                     case TypeAnnotation( name, typeNames )              => new TypeUnit()
                     
-                    // case class VariantClauseType( val name : String, val exprType : ExprType, val enum : Int ) extends ExprType
-                    // case class VariantType( val variants : List[VariantClauseType] ) extends ExprType
                     case VariantClauseDefinition( name, elementTypeNames )          =>
                     {
                         // TODO: Add constructor fn into var symbols
-                        println( elementTypeNames )
-                        new VariantClauseType( name, elementTypeNames.map( tn => typeNames.get(tn).get ), 0 )
+                        new VariantClauseType( name, elementTypeNames.map( tn => 
+                            typeNames.get(tn) match
+                            {
+                                case Some(exprType)     => exprType
+                                case _                  => throw new TypeError( expr.pos, "Unknown type name " + tn )
+                            }
+                        ), 0 )
                     }
                     case VariantTypeDefinition( clauses )                           =>
                     {
                         // Remove isInstanceOf vileness
-                        new VariantType( clauses.map( _.exprType.asInstanceOf[VariantClauseType] ) )
+                        new VariantType( clauses.map( _.exprType.asInstanceOf[VariantClauseType] ).zipWithIndex.map {
+                            // Re-map enums. Also not very nice.
+                            case (x, i ) => new VariantClauseType( x.name, x.elTypes, i )
+                        } )
                     }
                     
                     case TypeDefinition( typeName, typeParameters, instanceType )   =>
                     {
-                        // TODO: Add type parameters into type symbols in before to handle generics
-                        // Add type into type symbols
-                        typeNames.set( typeName, instanceType.exprType )
+                        typeNames.pop()
+                        
+                        // Get the pending type
+                        val pendingType = typeNames.get( typeName ).get.asInstanceOf[WeakTypeReference]
+                        pendingType.destType = instanceType.exprType
+                        typeNames.set( typeName, instanceType.exprType )                  
                         
                         new TypeUnit()
                     }

@@ -25,6 +25,8 @@ case class GenericType( id : Int = GenericType.lastId ) extends ExprType
     GenericType.lastId += 1
 }
 
+case class WeakTypeReference( var destType : ExprType = new Untyped() ) extends ExprType
+
 //case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
 
 // Need to implement typing for lists using variant types. 'ListType'[T]{ 'nil' => TypeUnit, 'cons' => TypeTuple[T]( T, ListType[T] ) }

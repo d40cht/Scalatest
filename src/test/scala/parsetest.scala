@@ -326,8 +326,14 @@ class CalculatorParseTest extends FunSuite
         // * Create variant values in the interpreter, with an enum to distinguish
         // * Simple pattern matching on enum with appropriate syntax
         assert( exec[FloatValue](
-            //"@type FloatList = Terminal | Cons float FloatList;\n" +
-            "@type FloatOption = None | Some float;\n" +
+            // Simple non-generic variant
+            "@type FloatOption = NoneF | SomeF float;\n" +
+            
+            // Variant with generic types
+            "@type Option a = None | Some a;\n" +
+            
+            // Variant with generic types and self-reference/recursion
+            "@type List a = Terminal | Cons a List;\n" +
             /*
             // Build the types so the variant clauses point to the parent type
             // Implement making the variant clauses by populating the fn symbol table
