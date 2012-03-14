@@ -4,46 +4,6 @@ import scala.collection.{mutable, immutable}
 import scala.util.parsing.combinator._
 import scala.util.parsing.input.Positional
 
-sealed abstract class ExprType
-{
-    def skipTypeRef = this
-}
-
-case class Untyped extends ExprType
-case class TypeUnit extends ExprType
-case class TypeFloat extends ExprType
-case class TypeBoolean extends ExprType
-case class TypeInteger extends ExprType
-case class TypeString extends ExprType
-
-case class FunctionType( val argTypes : List[ExprType], val retType : ExprType ) extends ExprType
-
-object GenericType
-{
-    var lastId = 0
-}
-
-case class GenericType( id : Int = GenericType.lastId ) extends ExprType
-{
-    GenericType.lastId += 1
-}
-
-case class TypeReference( val destName : String, var destType : ExprType = new Untyped() ) extends ExprType
-{
-    override def toString = "TypeReference : " + destName
-    override def skipTypeRef = destType.skipTypeRef
-}
-
-//case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
-
-// Need to implement typing for lists using variant types. 'ListType'[T]{ 'nil' => TypeUnit, 'cons' => TypeTuple[T]( T, ListType[T] ) }
-//
-// Start with option type
-case class VariantClauseType( val name : String, val elTypes : List[ExprType], val enum : Int ) extends ExprType
-case class VariantType( val variants : List[VariantClauseType] ) extends ExprType
-
-
-
 
 sealed abstract class Expression extends Positional
 {
@@ -136,6 +96,7 @@ object VisitAST
     }
 }
 
+
 object DumpAST
 {
     def apply( expr : Expression )
@@ -167,7 +128,12 @@ object DumpAST
                     case Multiplication(l, r)                           => pr( "Multiplication" )
                     case Division(l, r)                                 => pr( "Division" )
                     
-                    case IdDefinition( id, params, value : Expression ) => pr( "IdDefinition " + id )
+                    case IdDefinition( id, params, value : Expression ) =>
+                    {
+                        pr( "IdDefinition " + id )
+                        
+                        DumpTypes( value.exprType )
+                    }
                     case Apply( l, r )                                  => pr( "Apply" )
                     case IdExpression( id )                             => pr( "Id: " + id )
                     case ExprList( elements )                           => pr( "ExprList" )
