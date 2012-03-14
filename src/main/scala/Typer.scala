@@ -6,7 +6,7 @@ import scala.util.parsing.input.Position
 object buTypeAST
 {
     // Type names - @type foo=double etc
-    class TypeNameExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType]() )
+    class TypeNameExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType](), "Type not found" )
     {
         set( "float", new TypeFloat() )
         set( "int", new TypeInteger() )
@@ -14,13 +14,22 @@ object buTypeAST
     }
     
     // Types of ids: @def a = 12
-    class IdTypeExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType]() )
+    class IdTypeExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType](), "Identifier not found" )
     {
     }
     
     
     def apply( expr : Expression )
     {
+        def skipTypeRef( exprType : ExprType ) =
+        {
+            exprType match
+            {
+                case TypeReference(name, dest)  => dest
+                case _                          => exprType
+            }
+        }
+        
         class Worker extends ASTVisitor
         {
             val typeNames = new TypeNameExecutionContext()
@@ -50,7 +59,7 @@ object buTypeAST
                         // Is of type function - so we need to look up the parameter types
                         if ( params != Nil )
                         {
-                            val idType = idTypes.get(id)
+                            val idType = idTypes.getOption(id)
                             
                             // The visit from here will be into the body of the function, so set param types
                             // up for the call and inference within the implementation.
@@ -71,7 +80,7 @@ object buTypeAST
                     case TypeAnnotation( name, annotationTypeNames )    =>
                     {
                         typeNames.push()
-                        val paramTypes = annotationTypeNames.map( typeName => typeNames.get(typeName) match
+                        val paramTypes = annotationTypeNames.map( typeName => typeNames.getOption(typeName) match
                         {
                             case Some(exprType) => exprType
                             case None =>
@@ -91,12 +100,12 @@ object buTypeAST
                     case TypeDefinition( typeName, typeParameters, instanceType )   =>
                     { 
                         // Add this name as a pending generic type
-                        typeNames.set( typeName, new WeakTypeReference(typeName) )
+                        typeNames.set( typeName, new TypeReference(typeName) )
                         
                         // Register any generic parameter names
                         typeNames.push()
                         
-                        val paramTypes = typeParameters.map( tn => typeNames.get(tn) match
+                        val paramTypes = typeParameters.map( tn => typeNames.getOption(tn) match
                         {
                             case None =>
                             {
@@ -133,7 +142,7 @@ object buTypeAST
                         }
                         else
                         {
-                            val idType = idTypes.get(id)
+                            val idType = idTypes.getOption(id)
                             
                             idType match
                             {
@@ -148,37 +157,35 @@ object buTypeAST
                         {
                             case FunctionType( paramTypes, returnType ) =>
                             {
-                                if ( paramTypes == Nil ) returnType
-                                else
+                                val thisType = paramTypes.head
+
+                                val newFnType = thisType match
                                 {
-                                    val thisType = paramTypes.head
-                                    thisType match
+                                    case GenericType(id)    =>
                                     {
-                                        case GenericType(id)    =>
-                                        {
-                                            def replaceGeneric( x : ExprType ) = if (x==thisType) r.exprType else x
-                                            new FunctionType( paramTypes.tail.map( x => replaceGeneric(x) ), replaceGeneric( returnType ) )
-                                        }
-                                        case _                  =>
-                                        {
-                                            println( r.exprType, thisType )
-                                            if ( r.exprType != thisType ) throw new TypeError( expr.pos, "Invalid function argument" )
-                                            else new FunctionType( paramTypes.tail, returnType )
-                                        }
+                                        def replaceGeneric( x : ExprType ) = if (x==thisType) r.exprType else x
+                                        new FunctionType( paramTypes.tail.map( x => replaceGeneric(x) ), replaceGeneric( returnType ) )
                                     }
+                                    case _                  =>
+                                    {
+                                        val forwardedType = thisType.skipTypeRef
+                                        
+                                        println( r.exprType, forwardedType )
+                                        if ( r.exprType != forwardedType ) throw new TypeError( expr.pos, "Invalid function argument" )
+                                        else new FunctionType( paramTypes.tail, returnType )
+                                    }
+                                }
+                                
+                                newFnType match
+                                {
+                                    case FunctionType(Nil, returnType)  => newFnType.retType
+                                    case _                              => newFnType
                                 }
                             }
                             case _ => throw new TypeError( expr.pos, "Function application on invalid type" )
                         }
                     }
-                    case IdExpression( id )                             =>
-                    {
-                        idTypes.get(id) match
-                        {
-                            case Some(idType)   => idType
-                            case None           => throw new TypeError( expr.pos, "Undefined variable: " + id )
-                        }
-                    }
+                    case IdExpression( id )                             => idTypes.get( expr.pos, id )
                     case ExprList( elements )                           => elements.last.exprType
                     case BlockScopeExpression( contents )               =>
                     {
@@ -192,13 +199,7 @@ object buTypeAST
                     case VariantClauseDefinition( name, elementTypeNames )          =>
                     {
                         // TODO: Add constructor fn into var symbols
-                        new VariantClauseType( name, elementTypeNames.map( tn => 
-                            typeNames.get(tn) match
-                            {
-                                case Some(exprType)     => exprType
-                                case _                  => throw new TypeError( expr.pos, "Unknown type name " + tn )
-                            }
-                        ), 0 )
+                        new VariantClauseType( name, elementTypeNames.map( tn => new TypeReference( tn, typeNames.get( expr.pos, tn ) ) ), 0 )
                     }
                     case VariantTypeDefinition( clauses )                           =>
                     {
@@ -211,11 +212,6 @@ object buTypeAST
                             }
                         } )
                         
-                        for ( clause <- variantType.variants )
-                        {
-                            idTypes.set( clause.name, new FunctionType( clause.elTypes, variantType ) )
-                        }
-                        
                         variantType
                     }
                     
@@ -224,9 +220,28 @@ object buTypeAST
                         typeNames.pop()
                         
                         // Get the pending type
-                        val pendingType = typeNames.get( typeName ).get.asInstanceOf[WeakTypeReference]
+                        val pendingType = typeNames.get( expr.pos, typeName ).asInstanceOf[TypeReference]
                         pendingType.destType = instanceType.exprType
-                        typeNames.set( typeName, instanceType.exprType )                  
+                        typeNames.set( typeName, instanceType.exprType )
+                        
+                        instanceType.exprType match
+                        {
+                            case VariantType( clauses ) =>
+                            {
+                                for ( clause <- clauses )
+                                {
+                                    if ( clause.elTypes == Nil )
+                                    {
+                                        idTypes.set( clause.name, instanceType.exprType )
+                                    }
+                                    else
+                                    {
+                                        idTypes.set( clause.name, new FunctionType( clause.elTypes.map( _.skipTypeRef ), instanceType.exprType ) )
+                                    }
+                                }
+                            }
+                            case _ =>
+                        }           
                         
                         new TypeUnit()
                     }

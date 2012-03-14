@@ -86,7 +86,7 @@ class AssertionFailure( _position : Position, _msg : String ) extends Positioned
 
 
 
-class ValueExecutionContext extends ExecutionContextBase( () => new ContextFrame[BaseValue]() )
+class ValueExecutionContext extends ExecutionContextBase( () => new ContextFrame[BaseValue](), "Identifier not found" )
 {
     // Add built-ins
     {
@@ -368,7 +368,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 case IdDefinition( name, args, value )  => new IdDefinition( name, args, bindRec( value ) )
                 case IdExpression( name )               =>
                 {
-                    val res = context.get(name)
+                    val res = context.getOption(name)
                     res match
                     {
                         case None               => expr
@@ -458,7 +458,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 
                 rhs
             }
-            case IdExpression( name )           => context.get(name).get
+            case IdExpression( name )           => context.get(pos, name)
             case Apply( lhs, rhs )              =>
             {
                 simplify( pos, new ApplicationValue( eval(lhs), eval(rhs) ) )

@@ -5,6 +5,9 @@ import scala.util.parsing.combinator._
 import scala.util.parsing.input.Positional
 
 sealed abstract class ExprType
+{
+    def skipTypeRef = this
+}
 
 case class Untyped extends ExprType
 case class TypeUnit extends ExprType
@@ -13,7 +16,7 @@ case class TypeBoolean extends ExprType
 case class TypeInteger extends ExprType
 case class TypeString extends ExprType
 
-case class FunctionType( val argTypes : List[ExprType], val retType: ExprType ) extends ExprType
+case class FunctionType( val argTypes : List[ExprType], val retType : ExprType ) extends ExprType
 
 object GenericType
 {
@@ -25,9 +28,10 @@ case class GenericType( id : Int = GenericType.lastId ) extends ExprType
     GenericType.lastId += 1
 }
 
-case class WeakTypeReference( val destName : String, var destType : ExprType = new Untyped() ) extends ExprType
+case class TypeReference( val destName : String, var destType : ExprType = new Untyped() ) extends ExprType
 {
-    override def toString = "WeakTypeReference : " + destName
+    override def toString = "TypeReference : " + destName
+    override def skipTypeRef = destType.skipTypeRef
 }
 
 //case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
@@ -142,7 +146,7 @@ object DumpAST
             
             override def before( expr : Expression )
             {
-                def pr( s : String ) = println( ("| "*indent) + s + " : " + expr.exprType.toString )
+                def pr( s : String ) = println( ("| "*indent) + s )// + " : " + expr.exprType.toString )
                 
                 expr match
                 {
@@ -168,9 +172,9 @@ object DumpAST
                     case IdExpression( id )                             => pr( "Id: " + id )
                     case ExprList( elements )                           => pr( "ExprList" )
                     case BlockScopeExpression( contents )               => pr( "BlockScope" )
-                    case IfExpression( cond, trueBranch, falseBranch )  => pr("IfExpression")
+                    case IfExpression( cond, trueBranch, falseBranch )  => pr( "IfExpression" )
                     
-                    case TypeAnnotation( name, typeNames )              => pr( "TypeAnnotation " + name + " : " + typeNames.mkString( " -> " ) )
+                    case TypeAnnotation( name, typeNames )                          => pr( "TypeAnnotation " + name + " : " + typeNames.mkString( " -> " ) )
                     case VariantClauseDefinition( name, elementTypes )              => pr( "VariantClause " + name + " : " + elementTypes.mkString( " " ) )
                     case VariantTypeDefinition( clauses )                           => pr( "VariantTypeDefinition" )
                     case TypeDefinition( typeName, typeParameters, instanceType )   => pr( "TypeDefinition " + typeName + " : " + typeParameters.mkString( " " ) );

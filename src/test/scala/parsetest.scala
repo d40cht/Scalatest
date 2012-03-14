@@ -331,20 +331,21 @@ class CalculatorParseTest extends FunSuite
             "@def t1 = NoneF;\n" +
             "@def t2 = SomeF 12.0;\n" +
             
-            // Variant with generic types
-            "@type Option a = None | Some a;\n" +
-            "@def t3 = None;\n" +
-            "@def t4 = Some 13;\n" +
-            
             // Variant with self-reference/recursion
             "@type FloatList = FloatTerminal | FloatCons float FloatList;\n" +
             "@def t5 = FloatTerminal;\n" +
             "@def t6 = FloatCons 3.0 FloatTerminal;\n" +
             "@def t7 = FloatCons 4.0 (FloatCons 3.0 FloatTerminal);\n" +
             
+            // Variant with generic types
+            //"@type Option a = None | Some a;\n" +
+            //"@def t3 = None;\n" +
+            //"@def t4 = Some 13;\n" +
+            
             // Variant with generic types and self-reference/recursion
-            "@type List a = Terminal | Cons a List;\n" +
-            "@def t8 = Terminal;\n" +
+            //"@type List a = Terminal | Cons a List;\n" +
+            //"@def t8 = Terminal;\n" +
+            
             //"@def t9 = Cons 3.0 Terminal;\n" +
             //"@def t10 = Cons 3.0 (Cons 4.0 (Cons 5.0 Terminal));\n" +
             //"print t10;" +

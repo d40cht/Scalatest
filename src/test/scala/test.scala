@@ -381,6 +381,27 @@ class Test1 extends FunSuite
         assert( !lt( y, x ) )
     }
     
+    test( "Immutable circular references" )
+    {
+        // Note here that lazy vals are passed by name (: => Type)
+        class TestA( val v : Double, refFn : => TestB )
+        {
+            lazy val ref = refFn
+        }
+        
+        class TestB( val v : Double, refFn : => TestA )
+        {
+            lazy val ref = refFn
+        }
+        
+        lazy val cycle : TestA = new TestA( 3.0, new TestB( 4.0, cycle ) )
+        
+        assert( cycle.v === 3.0 )
+        assert( cycle.ref.v === 4.0 )
+        assert( cycle.ref.ref.v === 3.0 )
+        assert( cycle.ref.ref.ref.v === 4.0 )
+    }
+    
     test( "Collection munging" )
     {
         val a = List(1,2,3,4,5,6,7,8,9,10,11,12,13,14)
