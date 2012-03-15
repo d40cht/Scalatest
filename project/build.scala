@@ -14,7 +14,7 @@ object ScalatestBuild extends Build
         settings    = standardSettings ++ Seq[Sett](
             name                := "Scalatest",
             scalaVersion        := "2.9.1",
-            scalacOptions       += "-deprecation",
+            //scalacOptions       += "-deprecation",
             libraryDependencies ++= Seq(
                 "org.scalatest" % "scalatest_2.9.1" % "1.6.1",
                 "org.scalaz" % "scalaz-full_2.9.1" % "6.0.4",

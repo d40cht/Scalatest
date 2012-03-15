@@ -41,116 +41,99 @@ case class VariantClauseDefinition( clauseName : String, elementTypeNames : List
 case class VariantTypeDefinition( clauses : List[VariantClauseDefinition] ) extends Expression
 case class TypeDefinition( typeName : String, typeParameters : List[String], instanceType : VariantTypeDefinition ) extends Expression
 
-trait ASTVisitor
+
+abstract class ASTTransformer[T]( val default : T )
 {
-    def before( expr : Expression ) {}
-    def after( expr : Expression ) {}
+    def apply( expr : Expression, continue : () => List[T] ) : T =
+    {
+        continue()
+        default
+    }
 }
 
-object VisitAST
+object TransformAST
 {
-    def apply( expr : Expression, visitor : ASTVisitor ) =
+    def apply[T]( expr : Expression, transformer : ASTTransformer[T] ) =
     {
-        def rec( expr : Expression )
+        def rec( expr : Expression ) : T =
         {
-            visitor.before(expr)
             expr match
             {
-                case NullExpression()                               => 
-                case Constant(v)                                    =>
-                
-                case LogicalAnd(l, r)                               => rec(l);rec(r);
-                case LogicalOr(l, r)                                => rec(l);rec(r);
-                case CmpLt(l, r)                                    => rec(l);rec(r);
-                case CmpLe(l, r)                                    => rec(l);rec(r);
-                case CmpGt(l, r)                                    => rec(l);rec(r);
-                case CmpGe(l, r)                                    => rec(l);rec(r);
-                case CmpEq(l, r)                                    => rec(l);rec(r);
-                case CmpNe(l, r)                                    => rec(l);rec(r);
-                
-                case ListAppend(l, r)                               => rec(l);rec(r);
-                case Addition(l, r)                                 => rec(l);rec(r);
-                case Subtraction(l, r)                              => rec(l);rec(r);
-                case Multiplication(l, r)                           => rec(l);rec(r);
-                case Division(l, r)                                 => rec(l);rec(r);
+                case NullExpression()                               => transformer( expr, () => Nil)
+                case Constant(v)                                    => transformer( expr, () => Nil)
+                case BinOpExpression(l, r)                          => transformer( expr, () => List( rec(l), rec(r) ) )
                 
                 
-                case IdDefinition( id, params, value : Expression ) => rec(value);
-                case Apply( l, r )                                  => rec(l); rec(r);
-                case IdExpression( id )                             => 
-                case ExprList( elements )                           => elements.foreach( e => rec(e) );
-                case BlockScopeExpression( contents )               => rec( contents )
-                case IfExpression( cond, trueBranch, falseBranch )  => rec(cond); rec(trueBranch); rec(falseBranch);
-                case TypeAnnotation( name, typeNames )              =>
-                
-                case VariantClauseDefinition( name, elementTypes )              =>
-                case VariantTypeDefinition( clauses )                           => clauses.foreach( c => rec(c) );
-                case TypeDefinition( typeName, typeParameters, instanceType )   => rec(instanceType);
+                case IdDefinition( id, params, value : Expression ) => transformer( expr, () => List( rec(value) ) )
+                case Apply( l, r )                                  => transformer( expr, () => List( rec(l), rec(r) ) )
+                case IdExpression( id )                             => transformer( expr, () => Nil )
+                case ExprList( elements )                           => transformer( expr, () => elements.map( x => rec(x) ) )
+                case BlockScopeExpression( contents )               => transformer( expr, () => List( rec(contents) ) )
+                case IfExpression( cond, trueBranch, falseBranch )  => transformer( expr, () => List( rec(cond), rec(trueBranch), rec(falseBranch) ) )
+                case TypeAnnotation( name, typeNames )                          => transformer( expr, () => Nil)
+                case VariantClauseDefinition( name, elementTypes )              => transformer( expr, () => Nil)
+                case VariantTypeDefinition( clauses )                           => transformer( expr, () => clauses.map( c => rec(c) ) )
+                case TypeDefinition( typeName, typeParameters, instanceType )   => transformer( expr, () => List( rec(instanceType) ) )
             }
-            visitor.after(expr)
         }
         
         rec( expr )
     }
 }
 
-
 object DumpAST
 {
     def apply( expr : Expression )
     {
-        class Dumper extends ASTVisitor
+        class Dumper extends ASTTransformer[Unit]( Nil )
         {
             var indent = 0
             
-            override def before( expr : Expression )
+            override def apply( expr : Expression, continue : () => List[Unit] )
             {
                 def pr( s : String ) = println( ("| "*indent) + s )// + " : " + expr.exprType.toString )
                 
+                indent += 1
                 expr match
                 {
                     case NullExpression()                               => pr( "Null" )
                     case Constant(v)                                    => pr( "Constant: " + v.toString )
-                    case LogicalAnd(l, r)                               => pr( "LogicalAnd" )
-                    case LogicalOr(l, r)                                => pr( "Division" )
-                    case CmpLt(l, r)                                    => pr( "CmpLt" )
-                    case CmpLe(l, r)                                    => pr( "CmpLe" )
-                    case CmpGt(l, r)                                    => pr( "CmpGt" )
-                    case CmpGe(l, r)                                    => pr( "CmpGe" )
-                    case CmpEq(l, r)                                    => pr( "CmpEq" )
-                    case CmpNe(l, r)                                    => pr( "CmpNe" )
+                    case LogicalAnd(l, r)                               => pr( "LogicalAnd" ); continue();
+                    case LogicalOr(l, r)                                => pr( "Division" ); continue();
+                    case CmpLt(l, r)                                    => pr( "CmpLt" ); continue();
+                    case CmpLe(l, r)                                    => pr( "CmpLe" ); continue();
+                    case CmpGt(l, r)                                    => pr( "CmpGt" ); continue();
+                    case CmpGe(l, r)                                    => pr( "CmpGe" ); continue();
+                    case CmpEq(l, r)                                    => pr( "CmpEq" ); continue();
+                    case CmpNe(l, r)                                    => pr( "CmpNe" ); continue();
                     
-                    case ListAppend(l, r)                               => pr( "ListAppend" )
-                    case Addition(l, r)                                 => pr( "Addition" )
-                    case Subtraction(l, r)                              => pr( "Subtraction" )
-                    case Multiplication(l, r)                           => pr( "Multiplication" )
-                    case Division(l, r)                                 => pr( "Division" )
+                    case ListAppend(l, r)                               => pr( "ListAppend" ); continue();
+                    case Addition(l, r)                                 => pr( "Addition" ); continue();
+                    case Subtraction(l, r)                              => pr( "Subtraction" ); continue();
+                    case Multiplication(l, r)                           => pr( "Multiplication" ); continue();
+                    case Division(l, r)                                 => pr( "Division" ); continue();
                     
                     case IdDefinition( id, params, value : Expression ) =>
                     {
                         pr( "IdDefinition " + id )
+                        continue()
                         DumpTypes( value.exprType )
                     }
-                    case Apply( l, r )                                  => pr( "Apply" )
+                    case Apply( l, r )                                  => pr( "Apply" ); continue();
                     case IdExpression( id )                             => pr( "Id: " + id )
-                    case ExprList( elements )                           => pr( "ExprList" )
-                    case BlockScopeExpression( contents )               => pr( "BlockScope" )
-                    case IfExpression( cond, trueBranch, falseBranch )  => pr( "IfExpression" )
+                    case ExprList( elements )                           => pr( "ExprList" ); continue();
+                    case BlockScopeExpression( contents )               => pr( "BlockScope" ); continue();
+                    case IfExpression( cond, trueBranch, falseBranch )  => pr( "IfExpression" ); continue();
                     
-                    case TypeAnnotation( name, typeNames )                          => pr( "TypeAnnotation " + name + " : " + typeNames.mkString( " -> " ) )
-                    case VariantClauseDefinition( name, elementTypes )              => pr( "VariantClause " + name + " : " + elementTypes.mkString( " " ) )
-                    case VariantTypeDefinition( clauses )                           => pr( "VariantTypeDefinition" )
-                    case TypeDefinition( typeName, typeParameters, instanceType )   => pr( "TypeDefinition " + typeName + " : " + typeParameters.mkString( " " ) );
+                    case TypeAnnotation( name, typeNames )                          => pr( "TypeAnnotation " + name + " : " + typeNames.mkString( " -> " ) ); continue();
+                    case VariantClauseDefinition( name, elementTypes )              => pr( "VariantClause " + name + " : " + elementTypes.mkString( " " ) ); continue();
+                    case VariantTypeDefinition( clauses )                           => pr( "VariantTypeDefinition" ); continue();
+                    case TypeDefinition( typeName, typeParameters, instanceType )   => pr( "TypeDefinition " + typeName + " : " + typeParameters.mkString( " " ) ); continue();
                 }
-                indent += 1
-            }
-            override def after( expr : Expression )
-            {
                 indent -= 1
             }
         }
         
-        VisitAST( expr, new Dumper() )
+        TransformAST( expr, new Dumper() )
     }
 }
-

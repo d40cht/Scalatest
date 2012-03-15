@@ -30,7 +30,7 @@ object buTypeAST
             }
         }
         
-        class Worker extends ASTVisitor
+        class Worker extends ASTTransformer[Unit](Nil)
         {
             val typeNames = new TypeNameExecutionContext()
             val idTypes = new IdTypeExecutionContext()
@@ -41,14 +41,24 @@ object buTypeAST
                 t1
             }
             
-            override def before( expr : Expression )
+            override def apply( expr : Expression, continue : () => List[Unit] )
             {
-                expr match
+                expr.exprType = expr match
                 {
+                    case NullExpression()                               => new TypeUnit()
+                    case Constant(v)                                    => expr.exprType
+                    
+                    case BinOpExpression(l, r)                          => continue(); typeUnion( expr.pos, l.exprType, r.exprType )
+                
                     case BlockScopeExpression( contents )               =>
                     {
                         typeNames.push()
                         idTypes.push()
+                        continue()
+                        typeNames.pop()
+                        idTypes.pop()
+                        
+                        contents.exprType
                     }
                     
                     case IdDefinition( id, params, value : Expression ) =>
@@ -75,6 +85,27 @@ object buTypeAST
                                 case _ => throw new TypeError( expr.pos, "Missing type annotation for function: " + id )
                             }
                         }
+                        
+                        continue()
+                        
+                        typeNames.pop()
+                        idTypes.pop()
+                        
+                        if ( params == Nil )
+                        {
+                            idTypes.set( id, value.exprType )
+                            value.exprType
+                        }
+                        else
+                        {
+                            val idType = idTypes.getOption(id)
+                            
+                            idType match
+                            {
+                                case Some(FunctionType( paramTypes, returnType )) => returnType
+                                case _ => throw new TypeError( expr.pos, "Type inference failed for: " + id )
+                            }
+                        }
                     }
                     
                     case TypeAnnotation( name, annotationTypeNames )    =>
@@ -95,64 +126,16 @@ object buTypeAST
                         
                         typeNames.pop()
                         idTypes.set( name, fnType )
+                        
+                        continue()
+                        
+                        new TypeUnit()
                     }
                     
-                    case TypeDefinition( typeName, typeParameters, instanceType )   =>
-                    { 
-                        // Add this name as a pending generic type
-                        typeNames.set( typeName, new TypeReference(typeName) )
-                        
-                        // Register any generic parameter names
-                        typeNames.push()
-                        
-                        val paramTypes = typeParameters.map( tn => typeNames.getOption(tn) match
-                        {
-                            case None =>
-                            {
-                                // Assume this is a generic type parameter
-                                val generic = new GenericType()
-                                typeNames.set( tn, generic )
-                                generic
-                            }
-                            case _ =>
-                        } )
-                    }
-                    case _                                              =>
-                }
-            }
-            
-            override def after( expr : Expression )
-            {
-                val newType = expr match
-                {
-                    case NullExpression()                               => new TypeUnit()
-                    case Constant(v)                                    => expr.exprType
                     
-                    case BinOpExpression(l, r)                          => typeUnion( expr.pos, l.exprType, r.exprType )
-                    
-                    case IdDefinition( id, params, value : Expression )   =>
-                    {
-                        typeNames.pop()
-                        idTypes.pop()
-                        
-                        if ( params == Nil )
-                        {
-                            idTypes.set( id, value.exprType )
-                            value.exprType
-                        }
-                        else
-                        {
-                            val idType = idTypes.getOption(id)
-                            
-                            idType match
-                            {
-                                case Some(FunctionType( paramTypes, returnType )) => returnType
-                                case _ => throw new TypeError( expr.pos, "Type inference failed for: " + id )
-                            }
-                        }
-                    }    
                     case Apply( l, r )                                  =>
                     {
+                        continue()
                         l.exprType match
                         {
                             case FunctionType( paramTypes, returnType ) =>
@@ -182,27 +165,24 @@ object buTypeAST
                                     case _                              => newFnType
                                 }
                             }
-                            case _ => throw new TypeError( expr.pos, "Function application on invalid type" )
+                            case _ => throw new TypeError( expr.pos, "Function application on invalid type: " + l.exprType.toString )
                         }
                     }
                     case IdExpression( id )                             => idTypes.get( expr.pos, id )
-                    case ExprList( elements )                           => elements.last.exprType
-                    case BlockScopeExpression( contents )               =>
-                    {
-                        typeNames.pop()
-                        idTypes.pop()
-                        contents.exprType
-                    }
-                    case IfExpression( cond, trueBranch, falseBranch )  => typeUnion( expr.pos, trueBranch.exprType, falseBranch.exprType )
-                    case TypeAnnotation( name, typeNames )              => new TypeUnit()
+                    case ExprList( elements )                           => continue(); elements.last.exprType
+                    
+                    case IfExpression( cond, trueBranch, falseBranch )  => continue(); typeUnion( expr.pos, trueBranch.exprType, falseBranch.exprType )
                     
                     case VariantClauseDefinition( name, elementTypeNames )          =>
                     {
                         // TODO: Add constructor fn into var symbols
+                        continue();
                         new VariantClauseType( name, elementTypeNames.map( tn => new TypeReference( tn, typeNames.get( expr.pos, tn ) ) ), 0 )
                     }
                     case VariantTypeDefinition( clauses )                           =>
                     {
+                        continue();
+                        
                         // Remove asInstanceOf vileness
                         val variantType = new VariantType( clauses.map( _.exprType.asInstanceOf[VariantClauseType] ).zipWithIndex.map {
                             // Re-map enums. Also not very nice.
@@ -216,7 +196,27 @@ object buTypeAST
                     }
                     
                     case TypeDefinition( typeName, typeParameters, instanceType )   =>
-                    {
+                    { 
+                        // Add this name as a pending generic type
+                        typeNames.set( typeName, new TypeReference(typeName) )
+                        
+                        // Register any generic parameter names
+                        typeNames.push()
+                        
+                        val paramTypes = typeParameters.map( tn => typeNames.getOption(tn) match
+                        {
+                            case None =>
+                            {
+                                // Assume this is a generic type parameter
+                                val generic = new GenericType()
+                                typeNames.set( tn, generic )
+                                generic
+                            }
+                            case _ =>
+                        } )
+                        
+                        continue()
+                        
                         typeNames.pop()
                         
                         // Get the pending type
@@ -245,13 +245,12 @@ object buTypeAST
                         
                         new TypeUnit()
                     }
+                    case _                                              => new TypeUnit()
                 }
-                
-                expr.exprType = newType
             }
         }
         
-        VisitAST( expr, new Worker() )
+        TransformAST( expr, new Worker() )
     }
 }
 
