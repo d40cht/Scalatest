@@ -68,8 +68,67 @@ object VisitTypes
             }
             visitor.after(exprType)
         }
+        rec(exprType)
     }
 }
+
+/*
+object VisitTypes2
+{
+    def apply( exprType : ExprType, visitor : TypeVisitor ) =
+    {
+        def rec( exprType : ExprType )
+        {
+            
+            exprType match
+            {
+                case Untyped()                              =>
+                case TypeUnit()                             =>
+                case TypeFloat()                            =>
+                case TypeBoolean()                          =>
+                case TypeInteger()                          =>
+                case TypeString()                           =>
+                case FunctionType(argTypes, retType)        => argTypes.foreach( x => rec(x) ); rec(retType);
+                case GenericType(id)                        =>
+                case TypeReference(destName, destType)      => // Do not follow type references
+                case VariantClauseType(name, elTypes, enum) => elTypes.foreach( x => rec(x) );
+                case VariantType(variants)                  => variants.foreach( x => rec(x) );
+            }
+        }
+        visitor( exprType, rec(exprType) )
+    }
+}
+
+class Visitor2
+{
+    def apply( exprType : ExprType, recurse : => Unit ) =
+    {   
+        exprType match
+        {
+            case VariantType()          =>
+            {
+                println( "=== 1 ===" )
+                recurse()
+                println( "=== 2 ===" )
+            }
+            case _                      => recurse()
+        }
+    }
+}
+
+// To be applied to TypeVisitor2[Integer]
+class CountFloatTypes[Integer]
+{
+    def apply( exprType : ExprType, recurse : => Integer ) =
+    {
+        exprType match
+        {
+            case FloatType()    => 1 + recurse()
+            case _              => recurse()
+        }
+    }
+}
+*/
 
 object DumpTypes
 {
@@ -81,7 +140,7 @@ object DumpTypes
             
             override def before( exprType : ExprType )
             {
-                def pr( s : String ) = println( ("| "*indent) + s )
+                def pr( s : String ) = println( ("T "*indent) + s )
                 
                 exprType match
                 {
@@ -98,8 +157,14 @@ object DumpTypes
                     case VariantType(variants)                  => pr( "Variant" )
                 
                 }
+                indent += 1
+            }
+            override def after( exprType : ExprType )
+            {
+                indent -= 1
             }
         }
+        VisitTypes( exprType, new Dumper() )
     }
 }
 

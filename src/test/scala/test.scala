@@ -1,6 +1,7 @@
 import org.scalatest.FunSuite
 
 import scala.collection.mutable.{ListBuffer}
+import scala.util.continuations._
 
 class Test1 extends FunSuite
 {
@@ -48,6 +49,22 @@ class Test1 extends FunSuite
         val a = (0 until 10000).par.reduce( _ + _ )
         assert( a === 49995000 )
     }
+    
+    /*test( "Delimited continuations" )
+    {
+        reset
+        {
+            println( "Hello" )
+            
+            shift
+            { (cont : Unit => Unit) =>
+                println( "World" )
+                cont()
+                println( "Boom1" )
+            }
+            println( "Boom2" )
+        }
+    }*/
     
     test( "Named arguments" )
     {
