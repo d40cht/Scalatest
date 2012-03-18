@@ -1,0 +1,43 @@
+
+@def sum :: int -> int -> int;
+@def sum x y = x + y;
+
+@def diff :: int -> int -> int;
+@def diff x y = x - y;
+
+@def mul :: int -> int -> int;
+@def mul x y = x * y;
+
+@def apply :: (int -> int -> int) -> int -> int -> int;
+@def apply fn x y = fn x y;
+
+//assertEqual (sum  3 4) 7;
+//assertEqual (diff 10 5) 5;
+
+@def map :: (int -> int) -> [int] -> [int];
+@def map fn l = @if (l == nil) nil @else (fn (head l))::(map fn (tail l));
+
+@def aList = 4::3::2::1::nil;
+
+@def square :: int -> in;
+@def square x = mul x x;
+
+//assertEqual (map square aList) (16::9::4::1::nil)
+
+
+
+
+//@def pair :: a -> b -> (a -> b -> c) -> c;
+//@def pair a b c = c a b;
+
+//@def fst p = p (@def _ a b = a);
+//@def snd p = p (@def _ a b = b);
+
+//@def v1 = pair 12 200;
+
+//assertEqual (fst v1) 12;
+//assertEqual (snd v1) 200
+
+
+//assertEqual (sum 4 5) 9
+

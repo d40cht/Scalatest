@@ -35,7 +35,11 @@ case class ExprList( val elements : List[Expression] ) extends Expression
 case class BlockScopeExpression( val contents : Expression ) extends Expression
 case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
 
-case class TypeAnnotation( val name : String, val typeNames : List[String] ) extends Expression
+case class NamedTypeExpr( val typeName : String ) extends Expression
+case class ListTypeExpr( val expr : Expression ) extends Expression
+case class TypeExpr( val elements : List[Expression] ) extends Expression
+
+case class TypeAnnotation( val name : String, val typeExpr : Expression ) extends Expression
 
 case class VariantClauseDefinition( clauseName : String, elementTypeNames : List[String] ) extends Expression
 case class VariantTypeDefinition( clauses : List[VariantClauseDefinition] ) extends Expression
@@ -70,6 +74,9 @@ object TransformAST
                 case ExprList( elements )                           => transformer( expr, () => elements.map( x => rec(x) ) )
                 case BlockScopeExpression( contents )               => transformer( expr, () => List( rec(contents) ) )
                 case IfExpression( cond, trueBranch, falseBranch )  => transformer( expr, () => List( rec(cond), rec(trueBranch), rec(falseBranch) ) )
+                case NamedTypeExpr( name )                                      => transformer( expr, () => Nil)
+                case ListTypeExpr( expr )                                       => transformer( expr, () => List( rec(expr) ) )
+                case TypeExpr( elements )                                       => transformer( expr, () => elements.map( c => rec(c) ) )
                 case TypeAnnotation( name, typeNames )                          => transformer( expr, () => Nil)
                 case VariantClauseDefinition( name, elementTypes )              => transformer( expr, () => Nil)
                 case VariantTypeDefinition( clauses )                           => transformer( expr, () => clauses.map( c => rec(c) ) )
@@ -125,7 +132,11 @@ object DumpAST
                     case BlockScopeExpression( contents )               => pr( "BlockScope" ); continue();
                     case IfExpression( cond, trueBranch, falseBranch )  => pr( "IfExpression" ); continue();
                     
-                    case TypeAnnotation( name, typeNames )                          => pr( "TypeAnnotation " + name + " : " + typeNames.mkString( " -> " ) ); continue();
+                    case NamedTypeExpr( typeName )                                  => pr( "Named type " + typeName )
+                    case ListTypeExpr( expr )                                       => pr( "List type " ); continue();
+                    case TypeExpr( elements )                                       => pr( "Type expr" ); continue();
+                    case TypeAnnotation( name, typeExpr )                           => pr( "TypeAnnotation " + name ); continue();
+                    
                     case VariantClauseDefinition( name, elementTypes )              => pr( "VariantClause " + name + " : " + elementTypes.mkString( " " ) ); continue();
                     case VariantTypeDefinition( clauses )                           => pr( "VariantTypeDefinition" ); continue();
                     case TypeDefinition( typeName, typeParameters, instanceType )   => pr( "TypeDefinition " + typeName + " : " + typeParameters.mkString( " " ) ); continue();

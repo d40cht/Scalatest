@@ -104,8 +104,17 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         case "@def" ~ id ~ params ~ "=" ~ e => new IdDefinition( id, params, e )
     })
     
-    lazy val typeAnnotation : Parser[Expression] = positioned("@def" ~ ident ~ "::" ~ ident ~ (("->" ~> ident)*) ^^ {
-        case "@def" ~ id ~ "::" ~ type1 ~ remainingTypes => new TypeAnnotation( id, type1 :: remainingTypes )
+    lazy val namedType : Parser[Expression] = ident ^^ { x => new NamedTypeExpr(x) }
+    lazy val listType : Parser[Expression] = "[" ~> typeExpr <~ "]" ^^ { x => new ListTypeExpr(x) }
+    lazy val subType : Parser[Expression] = "(" ~> typeExpr <~ ")" ^^ { x => x }
+    
+    lazy val typeEl : Parser[Expression] = (namedType | listType | subType) ^^ { x => x }
+    lazy val typeExpr : Parser[Expression] = typeEl ~ (("->" ~> typeEl)*) ^^ {
+        case first ~ second => new TypeExpr( first :: second )
+    }
+    
+    lazy val typeAnnotation : Parser[Expression] = positioned("@def" ~ ident ~ "::" ~ typeExpr ^^ {
+        case "@def" ~ id ~ "::" ~ typeExpr => new TypeAnnotation( id, typeExpr )
     })
     
     lazy val variantClause : Parser[VariantClauseDefinition] = positioned(ident ~ (ident*) ^^
