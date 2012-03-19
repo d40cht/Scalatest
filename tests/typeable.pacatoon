@@ -11,32 +11,58 @@
 @def apply :: (int -> int -> int) -> int -> int -> int;
 @def apply fn x y = fn x y;
 
-//assertEqual (sum  3 4) 7;
-//assertEqual (diff 10 5) 5;
+@def r1 = apply sum 3 4;
 
-@def map :: (int -> int) -> [int] -> [int];
-@def map fn l = @if (l == nil) nil @else (fn (head l))::(map fn (tail l));
+assertEqual (sum  3 4) 7;
+assertEqual (diff 10 5) 5;
+
+@def id :: a -> a;
+@def id x = x;
+
+@def intId :: int -> int;
+@def intId x = x;
+
+
+@def double = mul 2;
+
+@def dlit :: int -> int;
+@def dlit x = 2 * x;
+
+@def r11 = intId 3;
+
+@def r2 = dlit (intId 3);
+
+@def r3 = sum (id 3) (id 4);
+
+
+@def r4 = id (double (id 3));
+
+@def tList = 2::1::nil;
+@def r5 = head tList;
+
+@def r6 = tail tList;
+
+
+@def r8 = (dlit (head tList)) :: (tail tList);
+
+assertEqual r8 (4::1::nil);
+
+@def map :: (a -> b) -> [a] -> [b];
+@def map fn l =
+    @if (l == nil) l
+    @else   (fn (head l)) ::
+            (map fn (tail l));
 
 @def aList = 4::3::2::1::nil;
 
-@def square :: int -> in;
-@def square x = mul x x;
+@def square :: int -> int;
+@def square x = x * x;
 
-//assertEqual (map square aList) (16::9::4::1::nil)
+@def sList = (map square aList);
+
+assertEqual sList (16::9::4::1::nil);
 
 
-
-
-//@def pair :: a -> b -> (a -> b -> c) -> c;
-//@def pair a b c = c a b;
-
-//@def fst p = p (@def _ a b = a);
-//@def snd p = p (@def _ a b = b);
-
-//@def v1 = pair 12 200;
-
-//assertEqual (fst v1) 12;
-//assertEqual (snd v1) 200
 
 
 //assertEqual (sum 4 5) 9

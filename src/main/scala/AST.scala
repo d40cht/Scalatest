@@ -22,11 +22,12 @@ case class CmpGt( _left : Expression, _right : Expression ) extends BinOpExpress
 case class CmpGe( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
 case class CmpEq( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
 case class CmpNe( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
-case class ListAppend( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
 case class Addition( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
 case class Subtraction( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
 case class Multiplication( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
 case class Division( _left : Expression, _right : Expression ) extends BinOpExpression( _left, _right )
+
+case class ListAppend( left : Expression, right : Expression ) extends Expression
 
 case class IdDefinition( id : String, params : List[String], value : Expression ) extends Expression
 case class Apply( lhs : Expression, rhs : Expression ) extends Expression
@@ -36,10 +37,10 @@ case class BlockScopeExpression( val contents : Expression ) extends Expression
 case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
 
 case class NamedTypeExpr( val typeName : String ) extends Expression
-case class ListTypeExpr( val expr : Expression ) extends Expression
+case class ListTypeExpr( val elExpr : Expression ) extends Expression
 case class TypeExpr( val elements : List[Expression] ) extends Expression
 
-case class TypeAnnotation( val name : String, val typeExpr : Expression ) extends Expression
+case class TypeAnnotation( val name : String, val theType : Expression ) extends Expression
 
 case class VariantClauseDefinition( clauseName : String, elementTypeNames : List[String] ) extends Expression
 case class VariantTypeDefinition( clauses : List[VariantClauseDefinition] ) extends Expression
@@ -66,7 +67,7 @@ object TransformAST
                 case NullExpression()                               => transformer( expr, () => Nil)
                 case Constant(v)                                    => transformer( expr, () => Nil)
                 case BinOpExpression(l, r)                          => transformer( expr, () => List( rec(l), rec(r) ) )
-                
+                case ListAppend(l, r)                               => transformer( expr, () => List( rec(l), rec(r) ) )
                 
                 case IdDefinition( id, params, value : Expression ) => transformer( expr, () => List( rec(value) ) )
                 case Apply( l, r )                                  => transformer( expr, () => List( rec(l), rec(r) ) )
@@ -75,9 +76,9 @@ object TransformAST
                 case BlockScopeExpression( contents )               => transformer( expr, () => List( rec(contents) ) )
                 case IfExpression( cond, trueBranch, falseBranch )  => transformer( expr, () => List( rec(cond), rec(trueBranch), rec(falseBranch) ) )
                 case NamedTypeExpr( name )                                      => transformer( expr, () => Nil)
-                case ListTypeExpr( expr )                                       => transformer( expr, () => List( rec(expr) ) )
+                case ListTypeExpr( elExpr )                                     => transformer( expr, () => List( rec(elExpr) ) )
                 case TypeExpr( elements )                                       => transformer( expr, () => elements.map( c => rec(c) ) )
-                case TypeAnnotation( name, typeNames )                          => transformer( expr, () => Nil)
+                case TypeAnnotation( name, theType )                            => transformer( expr, () => List ( rec(theType) ) )
                 case VariantClauseDefinition( name, elementTypes )              => transformer( expr, () => Nil)
                 case VariantTypeDefinition( clauses )                           => transformer( expr, () => clauses.map( c => rec(c) ) )
                 case TypeDefinition( typeName, typeParameters, instanceType )   => transformer( expr, () => List( rec(instanceType) ) )

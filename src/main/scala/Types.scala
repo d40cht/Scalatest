@@ -5,12 +5,15 @@ sealed abstract class ExprType
     def skipTypeRef = this
 }
 
+// TODO: These should all be objects
 case class Untyped extends ExprType
 case class TypeUnit extends ExprType
 case class TypeFloat extends ExprType
 case class TypeBoolean extends ExprType
 case class TypeInteger extends ExprType
 case class TypeString extends ExprType
+
+case class ListType( val elType : ExprType ) extends ExprType
 
 case class FunctionType( val argTypes : List[ExprType], val retType : ExprType ) extends ExprType
 
@@ -60,6 +63,7 @@ object VisitTypes
                 case TypeBoolean()                          =>
                 case TypeInteger()                          =>
                 case TypeString()                           =>
+                case ListType(elType)                       => rec(elType);
                 case FunctionType(argTypes, retType)        => argTypes.foreach( x => rec(x) ); rec(retType);
                 case GenericType(id)                        =>
                 case TypeReference(destName, destType)      => // Do not follow type references
@@ -150,6 +154,7 @@ object DumpTypes
                     case TypeBoolean()                          => pr( "Boolean" )
                     case TypeInteger()                          => pr( "Int" )
                     case TypeString()                           => pr( "String" )
+                    case ListType(elType)                       => pr( "List" )
                     case FunctionType(argTypes, retType)        => pr( "Function" )
                     case GenericType(id)                        => pr( "Generic" )
                     case TypeReference(destName, destType)      => pr( "TypeReference: " + destName )

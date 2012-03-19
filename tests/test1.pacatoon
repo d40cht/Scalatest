@@ -14,12 +14,14 @@
 
 //@import "tests/stdlib.pacatoon"
 
+@def map :: (a -> b) -> [a] -> [b];
 @def map fn l =
 {
     @if (l == nil) nil
     @else (fn (head l)) :: (map fn (tail l))
 };
 
+@def foldLeft :: (a -> b -> b) -> b -> [a] -> b;
 @def foldLeft fn acc l =
 {
     @if (l == nil) acc

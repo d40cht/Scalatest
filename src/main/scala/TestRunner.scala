@@ -14,8 +14,9 @@ object TestRunner extends Application
         val parsed = CalculatorDSL.parse( str )
         if (typeCheck)
         {
+            //DumpAST( parsed )
             buTypeAST( parsed )
-            DumpAST( parsed )
+            //DumpAST( parsed )
         }
         
         val execContext = new ValueExecutionContext()

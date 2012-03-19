@@ -16,6 +16,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     def floatingPointNumber: Parser[String] = """-?(\d+(\.\d*)?|\d*\.\d+)([eE][+-]?\d+)?[fFdD]?""".r
     
     def comment: Parser[Expression] = """//[^\r\n]*""".r ^^ { x => new NullExpression() }
+    def multiLineComment : Parser[Expression] = """\/\*[^(\*\/)]*\*\/""".r ^^ { x => new NullExpression() }
     
     
     def buildApply( initial : Expression, terms : List[Expression] ) =
@@ -132,7 +133,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         case "@type" ~ typeName ~ typeParameters ~ "=" ~ instanceType => new TypeDefinition( typeName, typeParameters, instanceType )
     } )
     
-    lazy val topLevel = positioned(comment | expr ^^ { x => x })
+    lazy val topLevel = positioned(comment | multiLineComment | expr ^^ { x => x })
     
     lazy val exprList : Parser[ExprList] = positioned(topLevel ~ ((((";")?) ~ exprList)?) ^^ {
         case e ~ None           => new ExprList( e :: Nil )

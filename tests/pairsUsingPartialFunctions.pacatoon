@@ -1,0 +1,74 @@
+
+@def id :: int -> int;
+@def id a = a;
+
+@def singleton :: int -> (int -> int) -> int;
+@def singleton val fn = fn val;
+
+@def singletonGet :: ((int -> int) -> int) -> int;
+@def singletonGet s =
+{
+    @def _ :: int -> int;
+    @def _ a = a;
+    s _
+};
+@def s1 = singleton 12;
+
+
+@def s1_0 = singleton 12 id;
+assertEqual s1_0 12;
+
+@def s1_1 = s1 id;
+assertEqual s1_1 12;
+
+@def tmp = singletonGet;
+@def s1Extract = singletonGet s1;
+
+assertEqual s1Extract 12;
+
+@def idPair :: int -> float -> (int -> float -> c) -> c;
+@def idPair a b c = c a b;
+
+@def t1 = idPair 4 32.0;
+
+@def fst :: ((int -> float -> c) -> c) -> int;
+@def fst p =
+{
+    @def _ :: int -> float -> int;
+    @def _ a b = a;
+    p _
+};
+
+
+@def r9 = fst t1;
+
+assertEqual r9 4;
+
+@def pair :: a -> b -> (a -> b -> c) -> c;
+@def pair a b c = c a b;
+
+@def fst :: ((a -> b -> c) -> c) -> a;
+@def fst p =
+{
+    // TODO: Auto-type anonymous functions
+    @def _ :: a -> b -> a;
+    @def _ a b = a;
+    p _
+};
+
+@def snd :: ((a -> b -> c) -> c) -> b;
+@def snd p =
+{
+    @def _ :: a -> b -> b;
+    @def _ a b = b;
+    p _
+};
+
+@def v1 = pair 12 200;
+
+@def r9 = fst v1;
+@def r10 = snd v1;
+
+assertEqual r9 12;
+assertEqual r10 200
+
