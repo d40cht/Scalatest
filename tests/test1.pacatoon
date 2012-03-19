@@ -21,16 +21,35 @@
     @else (fn (head l)) :: (map fn (tail l))
 };
 
+@def double :: int -> int;
+@def double x = x * x;
+
+assertEqual (map double (1::2::3::nil)) (2::4::6::nil);
+
 @def foldLeft :: (a -> b -> b) -> b -> [a] -> b;
 @def foldLeft fn acc l =
 {
     @if (l == nil) acc
     @else (fn (head l) (foldLeft fn acc (tail l)))
 };
+
+@def sum :: int -> int -> int;
+@def sum x y = x + y;
+
+assertEqual (foldLeft sum 5 (5::4::3::2::nil)) 19;
             
+@def mergeSort :: [a] -> [a];
 @def mergeSort l =
 {
-    @def elsAsLists l = map (@def _ x = x::nil) l;
+    @def toList :: a -> [a];
+    @def toList a = a::nil;
+    
+    assertEqual (map toList (1::2::3::nil)) ((1::nil)::(2::nil)::(3::nil)::nil);
+    
+    @def elsAsLists :: [a] -> [[a]];
+    @def elsAsLists l = map toList l;
+    
+    @def mergePair :: [a] -> [a] -> [a];
     @def mergePair l1 l2 =
     {
         // Wouldn't it be nice to have pattern matching?
@@ -40,6 +59,8 @@
         @else @if ((head l1) < (head l2)) ((head l1) :: (mergePair (tail l1) l2))
         @else ((head l2) :: (mergePair l1 (tail l2)))
     };
+    
+    @def mergeAdjacentPairs :: [[a]] -> [[a]];
     @def mergeAdjacentPairs l =
     {
         @if (l==nil) nil
@@ -51,9 +72,12 @@
             @else (mergePair first (head tail1)) :: (mergeAdjacentPairs (tail tail1))
         }
     };
-    @def mergeSortRec l = @if ((tail l) == nil) (head l) @else (mergeSortRec (mergeAdjacentPairs l));
     
-    mergeSortRec (elsAsLists l)
+    
+    @def mergeSortRec :: [[a]] -> [[a]];
+    @def mergeSortRec l = @if ((tail l) == nil) l @else (mergeSortRec (mergeAdjacentPairs l));
+    
+    mergeSortRec (head (elsAsLists l))
 };
 
 // Am I allowed a comment?

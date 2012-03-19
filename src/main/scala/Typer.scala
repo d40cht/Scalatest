@@ -17,6 +17,8 @@ object buTypeAST
     class IdTypeExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType](), "Identifier not found" )
     {
         set( "nil", new ListType( new GenericType() ) )
+        set( "toString", new FunctionType( List( new GenericType() ), new TypeString() ) )
+        set( "print", new FunctionType( List( new TypeString() ), new TypeUnit() ) )
         
         {
             val elType = new GenericType()
