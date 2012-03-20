@@ -1,0 +1,44 @@
+@def sum :: int -> int -> int;
+@def sum x y = x + y;
+
+@def mul :: int -> int -> int;
+@def mul x y = x * y;
+
+// Function which at run time can return one of two closures
+@def chooseBound :: int -> int -> (int -> int);
+@def chooseBound choice fst = @if (choice==0) sum fst @else mul fst;
+
+assertEqual ((chooseBound 0 3) 4) 7;
+assertEqual ((chooseBound 1 3) 4) 12;
+
+@def p1 = chooseBound 0 3;
+@def p2 = chooseBound 1 3;
+
+assertEqual (p1 3) 6;
+assertEqual (p2 3) 9;
+
+// Closure which escapes from its parent function
+@def distFrom :: float -> float -> (float -> float -> float);
+@def distFrom x y =
+{
+    @def fn :: float -> float -> float;
+    @def fn x2 y2 =
+    {
+        @def xdiff = (x2-x);
+        @def ydiff = (y2-y);
+        
+        xdiff*xdiff + ydiff*ydiff
+    };
+    
+    fn
+};
+
+@def fromOrigin = distFrom 0.0 0.0;
+
+assertEqual (fromOrigin 2.0 2.0) 8.0;
+assertEqual (fromOrigin 0.0 2.0) 4.0;
+assertEqual (fromOrigin 2.0 0.0) 4.0;
+
+@def fromPoint = distFrom 3.0 2.0;
+assertEqual (fromPoint 5.0 2.0) 4.0;
+assertEqual (fromPoint 3.0 0.0) 4.0
