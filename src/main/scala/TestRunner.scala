@@ -4,23 +4,25 @@ object TestRunner extends Application
 {
     override def main( args : Array[String] ) =
     {
-        assert( args.length == 1 || args.length == 2 )
+        val typeCheck = true
         
-        val file = scala.io.Source.fromFile( args(0) )
-        val typeCheck = if ( args.length > 1 && args(1) == "typeCheck" ) true else false
-        
-        val str = file.mkString
-        file.close()
-        val parsed = CalculatorDSL.parse( str )
-        if (typeCheck)
+        for ( f <- args )
         {
-            //DumpAST( parsed )
-            buTypeAST( parsed )
-            //DumpAST( parsed )
+            println( "Evaluation: " + f )
+            val file = scala.io.Source.fromFile( f )
+            val str = file.mkString
+            file.close()
+            val parsed = CalculatorDSL.parse( str )
+            if (typeCheck)
+            {
+                //DumpAST( parsed )
+                buTypeAST( parsed )
+                //DumpAST( parsed )
+            }
+            
+            val execContext = new ValueExecutionContext()
+            val evaluator = new DynamicASTEvaluator( execContext )
+            evaluator.eval( parsed )
         }
-        
-        val execContext = new ValueExecutionContext()
-        val evaluator = new DynamicASTEvaluator( execContext )
-        evaluator.eval( parsed )
     }
 }
