@@ -22,7 +22,7 @@
 };
 
 @def double :: int -> int;
-@def double x = x * x;
+@def double x = x + x;
 
 assertEqual (map double (1::2::3::nil)) (2::4::6::nil);
 
@@ -36,75 +36,33 @@ assertEqual (map double (1::2::3::nil)) (2::4::6::nil);
 @def sum :: int -> int -> int;
 @def sum x y = x + y;
 
-assertEqual (foldLeft sum 5 (5::4::3::2::nil)) 19;
-            
-@def mergeSort :: [a] -> [a];
-@def mergeSort l =
-{
-    @def toList :: a -> [a];
-    @def toList a = a::nil;
-    
-    assertEqual (map toList (1::2::3::nil)) ((1::nil)::(2::nil)::(3::nil)::nil);
-    
-    @def elsAsLists :: [a] -> [[a]];
-    @def elsAsLists l = map toList l;
-    
-    @def mergePair :: [a] -> [a] -> [a];
-    @def mergePair l1 l2 =
-    {
-        // Wouldn't it be nice to have pattern matching?
-        @if ((l1 == nil) && (l2 == nil)) nil
-        @else @if (l1 == nil) ((head l2) :: (mergePair l1 (tail l2)))
-        @else @if (l2 == nil) ((head l1) :: (mergePair (tail l1) l2))
-        @else @if ((head l1) < (head l2)) ((head l1) :: (mergePair (tail l1) l2))
-        @else ((head l2) :: (mergePair l1 (tail l2)))
-    };
-    
-    @def mergeAdjacentPairs :: [[a]] -> [[a]];
-    @def mergeAdjacentPairs l =
-    {
-        @if (l==nil) nil
-        @else
-        {
-            @def first = head l;
-            @def tail1 = tail l;
-            @if ( tail1 == nil ) first :: nil
-            @else (mergePair first (head tail1)) :: (mergeAdjacentPairs (tail tail1))
-        }
-    };
-    
-    
-    @def mergeSortRec :: [[a]] -> [[a]];
-    @def mergeSortRec l = @if ((tail l) == nil) l @else (mergeSortRec (mergeAdjacentPairs l));
-    
-    mergeSortRec (head (elsAsLists l))
-};
+assertEqual (foldLeft sum 5 (5::4::3::2::nil)) 19;    
 
 // Am I allowed a comment?
 
+@def reverse :: [a] -> [a];
 @def reverse l =
 {
+    @def revrec :: [a] -> [a] -> [a];
     @def revrec l rl = @if (l==nil) rl @else revrec (tail l) ((head l)::rl);
+    
     revrec l nil
 };
 
-//@def a : Integer = 12
-//@def b : Float = 13.0
-//@def sum (x : Integer) (y : Integer) : Integer = x + y
-
 assertEqual (reverse (1.0::2.0::3.0::4.0::nil)) (4.0::3.0::2.0::1.0::nil);
 
-
-@def a = 5::4::3::6::7::9::8::0::1::2::nil;
-@def res = a;
-
-assertEqual (mergeSort a) (0::1::2::3::4::5::6::7::8::9::nil);
-
-@def a2 = 5.0::4.0::3.0::6.0::7.0::9.0::8.0::0.0::1.0::2.0::nil;
-assertEqual (mergeSort a2) (0.0::1.0::2.0::3.0::4.0::5.0::6.0::7.0::8.0::9.0::nil);
-
+@def divide :: float -> float -> float;
 @def divide x y = x / y;
-@def fixedDivide x = (@def _ y = divide y x);
+
+@def fixedDivide :: float -> (float -> float);
+@def fixedDivide x =
+{
+    @def _ :: float -> float;
+    @def _ y = divide y x;
+    
+    _
+};
+
 @def halve = fixedDivide 2.0;
 @def third = fixedDivide 3.0;
 

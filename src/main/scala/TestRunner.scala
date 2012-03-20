@@ -16,7 +16,9 @@ object TestRunner extends Application
             if (typeCheck)
             {
                 //DumpAST( parsed )
+                println( "  Checking types" )
                 buTypeAST( parsed )
+                println( "    (passed)" )
                 //DumpAST( parsed )
             }
             
