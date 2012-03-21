@@ -56,11 +56,28 @@ object ByteCodeGenerator
         // Register the value
         def register( value : ValueReference, instr : ByteCode ) : ValueReference =
         {
+            //functionStack.head._2.append( instr )
+            
             val name = value.toString
             val padding = " " * (30-name.length)
             println( name + padding + " : " + instr.toString )
             value
         }
+        
+        /*var functionStack = ("Global", mutable.ArrayBuffer[ByteCode]())::Nil
+        
+        def pushFunction( name : String )
+        {
+            functionStack = (name, mutable.ArrayBuffer[ByteCode]()) :: functionStack
+            idContext.push()
+        }
+        
+        def popFunction()
+        {
+            val head = functionStack.head
+            idContext.pop()
+            functionStack = functionStack.tail
+        }*/
     }
     
     class Worker extends ASTTransformer[ValueReference]( new ValueReference("Null value") )
@@ -93,12 +110,20 @@ object ByteCodeGenerator
                 
                 case IdDefinition( id, params, value : Expression ) =>
                 {
-                    if ( params != Nil ) throw new CodeGenError( expr.pos, "Function definitions not yet supported" )
-                    
-                    val List(exprValue) = continue()
-                    val idRef = new ValueReference(id)
-                    codeGenerator.idContext.set( id, idRef )
-                    codeGenerator.register( idRef, new Definition(exprValue) )
+                    if ( params != Nil )
+                    {
+                        throw new CodeGenError( expr.pos, "Function definition not yet supported " )
+                        //codeGenerator.pushFunction( id )
+                        //continue()
+                        //codeGenerator.popFunction()
+                    }
+                    else
+                    {
+                        val List(exprValue) = continue()
+                        val idRef = new ValueReference(id)
+                        codeGenerator.idContext.set( id, idRef )
+                        codeGenerator.register( idRef, new Definition(exprValue) )
+                    }
                 }
                 
                 case Apply( l, r ) => throw new CodeGenError( expr.pos, "Application not yet supported " )
