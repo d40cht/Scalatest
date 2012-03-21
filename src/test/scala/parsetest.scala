@@ -5,11 +5,12 @@ import org.seacourt.pacatoon._
 
 class CalculatorParseTest extends FunSuite
 {
-    def exec[T]( str : String, dump : Boolean = false, checkTypes : Boolean = false ) =
+    def exec[T]( str : String, dump : Boolean = false, checkTypes : Boolean = false, genByteCode : Boolean = false ) =
     {
         val parsed = CalculatorDSL.parse( str )
         if (checkTypes) buTypeAST( parsed )
         if (dump) DumpAST( parsed )
+        if (genByteCode) bytecode.ByteCodeGenerator( parsed )
         val execContext = new ValueExecutionContext()
         val evaluator = new DynamicASTEvaluator( execContext )
         
@@ -361,8 +362,17 @@ class CalculatorParseTest extends FunSuite
             "@def headOrZero v = @match v { case Terminal -> 0.0; case Cons v -> v };\n" +
             "headOrZero c",*/
             "5.0",
-            dump=true, checkTypes=true
+            checkTypes=true
         ).value == 5.0 )
+    }
+    
+    test("Byte code generation")
+    {
+        assert( exec[FloatValue](
+            "@def a = (4.0+5.0)/3.0;\n" +
+            "@def b = @if (0==0) a * 2.0 @else a * 3.0\n",
+            checkTypes=true, genByteCode=true
+        ).value === 6.0 )
     }
     
     /*test("Record type")

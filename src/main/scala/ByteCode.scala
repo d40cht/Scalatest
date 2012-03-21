@@ -18,9 +18,10 @@ object ValueReference
     }
 }
 
-final class ValueReference( val name : String )
+final class ValueReference( _name : String, userDefined : Boolean = false )
 {
-    val id = ValueReference.nextId
+    val name = if ( userDefined ) _name else _name + "_" + ValueReference.nextId.toString
+    override def toString = name
 }
 
 sealed abstract class ByteCode
@@ -37,14 +38,7 @@ case class ListAppend( val lhs : ValueReference, val rhs : ValueReference ) exte
 case class ConditionalBranch( val cond : ValueReference, val thenBranch : ValueReference, val elseBranch : ValueReference ) extends ByteCode
 case class BinOp( val lhsVar : ValueReference, val rhsVar : ValueReference, val opType : BinOpType.Value ) extends ByteCode
 
-case class Phi() extends ByteCode
-{
-    private val inputs = mutable.ArrayBuffer[ValueReference]()
-    def addInput( input : ValueReference )
-    {
-        inputs.append( input )
-    }
-}
+case class Phi( val inputs : List[ValueReference] ) extends ByteCode
 
 class CodeGenError( _position : Position, _msg : String ) extends PositionedException(_position, _msg)
 
@@ -55,8 +49,11 @@ object ByteCodeGenerator
         private var lastId = 0
         
         // Register the value
-        def register( value : ValueReference, instr : ByteCode, append : Boolean = true ) : ValueReference =
+        def register( value : ValueReference, instr : ByteCode ) : ValueReference =
         {
+            val name = value.toString
+            val padding = " " * (30-name.length)
+            println( name + padding + " : " + instr.toString )
             value
         }
         
@@ -64,6 +61,11 @@ object ByteCodeGenerator
         def append( instr : ByteCode )
         {
         }
+        
+        def internalRef( name : String ) = new ValueReference(name)
+        
+        // This should be gotten from the local scope
+        def idRef( name : String ) = new ValueReference(name, userDefined=true)
         
     }
     
@@ -77,13 +79,12 @@ object ByteCodeGenerator
             
             expr match
             {
-                case ConstantExpression( v ) => codeGenerator.register( new ValueReference("const"), new Constant( v ) )
+                case ConstantExpression( v ) => codeGenerator.register( codeGenerator.internalRef("const"), new Constant( v ) )
                 
                 case BinOpExpression( l, r, opType ) =>
                 {
                     import BinOpType._
                     
-                    continue()
                     opType match
                     {
                         // LogicalAnd and LogicalOr should be transformed into if expression
@@ -91,7 +92,7 @@ object ByteCodeGenerator
                         case _                          =>
                         {
                             val List(lVal, rVal) = continue()
-                            codeGenerator.register( new ValueReference("binop" + opType.toString), new BinOp( lVal, rVal, opType ) )
+                            codeGenerator.register( codeGenerator.internalRef("binop" + opType.toString), new BinOp( lVal, rVal, opType ) )
                         }
                     }
                 }
@@ -102,13 +103,14 @@ object ByteCodeGenerator
                     
                     val List(exprValue) = continue()
                     
-                    codeGenerator.register( new ValueReference(id), new Definition(exprValue) )
+                    codeGenerator.register( codeGenerator.idRef(id), new Definition(exprValue) )
                 }
                 
                 case Apply( l, r ) => throw new CodeGenError( expr.pos, "Application not yet supported " )
                 case IdExpression( id ) =>
                 {
-                    codeGenerator.register( new ValueReference( "idref" ), new Definition( new ValueReference( id ) ) )
+                    //codeGenerator.register( codeGenerator.internalRef( "idref" ), new Definition( codeGenerator.idRef( id ) ) )
+                    codeGenerator.idRef( id )
                 }
                 
                 case ExprList( elements ) => continue().last
@@ -118,28 +120,21 @@ object ByteCodeGenerator
                 {
                     val condValue = rec( cond )
                     
-                    val thenBranchLabel = new Label()
-                    val elseBranchLabel = new Label()
-                    val thenBranchValue = codeGenerator.register( new ValueReference("thenLabel"), thenBranchLabel, false )
-                    val elseBranchValue = codeGenerator.register( new ValueReference("elseLabel"), elseBranchLabel, false )
+                    val thenBranchValue = codeGenerator.internalRef("thenLabel")
+                    val elseBranchValue = codeGenerator.internalRef("elseLabel")
+                    val phiValue = codeGenerator.internalRef("ifPhi")
                     
-                    val phi = new Phi()
-                    val phiValue = codeGenerator.register( new ValueReference("ifphi"), phi, false )
+                    codeGenerator.register( codeGenerator.internalRef("ifbranch"), new ConditionalBranch( condValue, thenBranchValue, elseBranchValue ) )
                     
-                    codeGenerator.register( new ValueReference("ifbranch"), new ConditionalBranch( condValue, thenBranchValue, elseBranchValue ) )
-                    
-                    codeGenerator.append( thenBranchLabel )
+                    codeGenerator.register( thenBranchValue, new Label() )
                     val thenFinalValue = rec( thenBranch )
+                    codeGenerator.register( codeGenerator.internalRef("exit"), new Branch( phiValue ) )
                     
-                    codeGenerator.append( elseBranchLabel )
+                    codeGenerator.register( elseBranchValue, new Label() )
                     val elseFinalValue = rec( elseBranch )
+                    codeGenerator.register( codeGenerator.internalRef("exit"), new Branch( phiValue ) )
                     
-                    phi.addInput( thenFinalValue )
-                    phi.addInput( elseFinalValue )
-                    
-                    codeGenerator.append( phi )
-                    
-                    phiValue
+                    codeGenerator.register( phiValue, new Phi( List(thenFinalValue, elseFinalValue) ) )
                 }
                 
                 case _ => throw new CodeGenError( expr.pos, "Invalid AST node for codegen: " + expr.getClass.getName )
