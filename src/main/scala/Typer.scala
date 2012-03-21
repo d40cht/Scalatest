@@ -68,12 +68,12 @@ object buTypeAST
                 }
             }
             
-            override def apply( expr : Expression, continue : () => List[Unit] )
+            override def apply( expr : Expression, continue : () => List[Unit], rec : Expression => Unit )
             {
                 expr.exprType = expr match
                 {
                     case NullExpression()                               => TypeUnit
-                    case Constant(v)                                    => expr.exprType
+                    case ConstantExpression(v)                          => expr.exprType
                     
                     case ListAppend(l, r)                               =>
                     {
@@ -88,7 +88,7 @@ object buTypeAST
                         }
                     }
                     
-                    case BinOpExpression(l, r)                          => continue(); typeUnion( expr.pos, l.exprType, r.exprType )
+                    case BinOpExpression(l, r, optType)                 => continue(); typeUnion( expr.pos, l.exprType, r.exprType )
                 
                     case BlockScopeExpression( contents )               =>
                     {

@@ -349,21 +349,10 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
             val res = expr match
             {
                 case NullExpression()                   => new NullExpression()
-                case Constant( value )                  => expr
+                case ConstantExpression( value )        => expr
                 
-                case LogicalAnd( left, right )          => new LogicalAnd( bindRec( left ), bindRec( right ) )
-                case LogicalOr( left, right )           => new LogicalOr( bindRec( left ), bindRec( right ) )
-                case CmpLt( left, right )               => new CmpLt( bindRec( left ), bindRec( right ) )
-                case CmpLe( left, right )               => new CmpLe( bindRec( left ), bindRec( right ) )
-                case CmpGt( left, right )               => new CmpGt( bindRec( left ), bindRec( right ) )
-                case CmpGe( left, right )               => new CmpGe( bindRec( left ), bindRec( right ) )
-                case CmpEq( left, right )               => new CmpEq( bindRec( left ), bindRec( right ) )
-                case CmpNe( left, right )               => new CmpNe( bindRec( left ), bindRec( right ) )
-                case ListAppend( left, right )          => new ListAppend( bindRec( left ), bindRec( right ) )
-                case Addition( left, right )            => new Addition( bindRec( left ), bindRec( right ) )
-                case Subtraction( left, right )         => new Subtraction( bindRec( left ), bindRec( right ) )
-                case Multiplication( left, right )      => new Multiplication( bindRec( left ), bindRec( right ) )
-                case Division( left, right )            => new Division( bindRec( left ), bindRec( right ) )
+                case BinOpExpression( left, right, op ) => new BinOpExpression( bindRec(left), bindRec(right), op )
+                case ListAppend( left, right )          => new ListAppend( bindRec(left), bindRec(right) )
                 
                 case IdDefinition( name, args, value )  => new IdDefinition( name, args, bindRec( value ) )
                 case IdExpression( name )               =>
@@ -373,7 +362,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                     {
                         case None               => expr
                         case Some(UnitValue())  => expr
-                        case Some(v)            => new Constant(v)
+                        case Some(v)            => new ConstantExpression(v)
                     }
                 }
                 case Apply( lhs, rhs )                  => new Apply( bindRec( lhs ), bindRec( rhs ) )
@@ -388,6 +377,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 }
                 case IfExpression( cond, trueBranch, falseBranch )  => new IfExpression( bindRec(cond), bindRec(trueBranch), bindRec(falseBranch) )
                 case TypeAnnotation( name, typeNames )              => expr
+                case _ => expr
             }
             
             res.setPos( expr.pos )
@@ -409,41 +399,44 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
         expr match
         {
             case NullExpression()                   => new UnitValue()
-            case Constant( value )                  => value
+            case ConstantExpression( value )        => value
             
-            case LogicalAnd( left, right )          =>
+            case BinOpExpression( left, right, op ) => op match
             {
-                val lvalue = eval(left)
-                lvalue match
+                case BinOpType.LogicalAnd          =>
                 {
-                    case BooleanValue(false)    => lvalue
-                    case BooleanValue(true)     => eval(right)
-                    case _                      => throw new TypeError( pos, "Arguments to logical operators must be of boolean type" )
+                    val lvalue = eval(left)
+                    lvalue match
+                    {
+                        case BooleanValue(false)    => lvalue
+                        case BooleanValue(true)     => eval(right)
+                        case _                      => throw new TypeError( pos, "Arguments to logical operators must be of boolean type" )
+                    }
                 }
-            }
 
-            case LogicalOr( left, right )          =>
-            {
-                val lvalue = eval(left)
-                lvalue match
+                case BinOpType.LogicalOr          =>
                 {
-                    case BooleanValue(true)     => lvalue
-                    case BooleanValue(false)    => eval(right)
-                    case _                      => throw new TypeError( pos, "Arguments to logical operators must be of boolean type" )
+                    val lvalue = eval(left)
+                    lvalue match
+                    {
+                        case BooleanValue(true)     => lvalue
+                        case BooleanValue(false)    => eval(right)
+                        case _                      => throw new TypeError( pos, "Arguments to logical operators must be of boolean type" )
+                    }
                 }
+                
+                case BinOpType.CmpLt               => evaluator.lt( pos, eval(left), eval(right) )
+                case BinOpType.CmpLe               => evaluator.le( pos, eval(left), eval(right) )
+                case BinOpType.CmpGt               => evaluator.gt( pos, eval(left), eval(right) )
+                case BinOpType.CmpGe               => evaluator.ge( pos, eval(left), eval(right) )
+                case BinOpType.CmpEq               => evaluator.eq( pos, eval(left), eval(right) )
+                case BinOpType.CmpNe               => evaluator.ne( pos, eval(left), eval(right) )
+                
+                case BinOpType.Addition            => evaluator.add( pos, eval(left), eval(right) )
+                case BinOpType.Subtraction         => evaluator.subtract( pos, eval(left), eval(right) )
+                case BinOpType.Multiplication      => evaluator.multiply( pos, eval(left), eval(right) )
+                case BinOpType.Division            => evaluator.divide( pos, eval(left), eval(right) )
             }
-            
-            case CmpLt( left, right )               => evaluator.lt( pos, eval(left), eval(right) )
-            case CmpLe( left, right )               => evaluator.le( pos, eval(left), eval(right) )
-            case CmpGt( left, right )               => evaluator.gt( pos, eval(left), eval(right) )
-            case CmpGe( left, right )               => evaluator.ge( pos, eval(left), eval(right) )
-            case CmpEq( left, right )               => evaluator.eq( pos, eval(left), eval(right) )
-            case CmpNe( left, right )               => evaluator.ne( pos, eval(left), eval(right) )
-            
-            case Addition( left, right )            => evaluator.add( pos, eval(left), eval(right) )
-            case Subtraction( left, right )         => evaluator.subtract( pos, eval(left), eval(right) )
-            case Multiplication( left, right )      => evaluator.multiply( pos, eval(left), eval(right) )
-            case Division( left, right )            => evaluator.divide( pos, eval(left), eval(right) )
             
             case ListAppend( left, right )          => new ListElementValue( eval(left), eval(right) )
             
@@ -505,7 +498,9 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
             {
                 eval(instanceType)
                 new UnitValue()
-            }                
+            }
+            
+            case _ => new UnitValue()
         }
     }
 }

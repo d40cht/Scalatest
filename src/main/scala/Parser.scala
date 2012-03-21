@@ -36,31 +36,31 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     lazy val term4: Parser[Expression] = positioned(term3 ~ ((("&&"|"||") ~ expr)?) ^^
     {
         case e ~ None => e
-        case l ~ Some("&&" ~ r)     => new LogicalAnd( l, r )
-        case l ~ Some("||" ~ r)     => new LogicalOr( l, r )
+        case l ~ Some("&&" ~ r)     => new BinOpExpression( l, r, BinOpType.LogicalAnd )
+        case l ~ Some("||" ~ r)     => new BinOpExpression( l, r, BinOpType.LogicalAnd )
     })
     
     lazy val term3: Parser[Expression] = positioned(term2 ~ ((("<="|">="|"=="|"!="|"<"|">") ~ expr)?) ^^
     {
         case e ~ None => e
-        case l ~ Some("<=" ~ r)     => new CmpLe( l, r )
-        case l ~ Some(">=" ~ r)     => new CmpGe( l, r )
-        case l ~ Some("==" ~ r)     => new CmpEq( l, r )
-        case l ~ Some("!=" ~ r)     => new CmpNe( l, r )
-        case l ~ Some("<" ~ r)      => new CmpLt( l, r )
-        case l ~ Some(">" ~ r)      => new CmpGt( l, r )
+        case l ~ Some("<=" ~ r)     => new BinOpExpression( l, r, BinOpType.CmpLe )
+        case l ~ Some(">=" ~ r)     => new BinOpExpression( l, r, BinOpType.CmpGe )
+        case l ~ Some("==" ~ r)     => new BinOpExpression( l, r, BinOpType.CmpEq )
+        case l ~ Some("!=" ~ r)     => new BinOpExpression( l, r, BinOpType.CmpNe )
+        case l ~ Some("<" ~ r)      => new BinOpExpression( l, r, BinOpType.CmpLt )
+        case l ~ Some(">" ~ r)      => new BinOpExpression( l, r, BinOpType.CmpGt )
     })
     
     lazy val term2: Parser[Expression] = positioned(term1 ~ ((("+"|"-") ~ term2)?) ^^ {
         case e ~ None => e
-        case l ~ Some("+" ~ r)      => new Addition( l, r )
-        case l ~ Some("-" ~ r)      => new Subtraction( l, r )
+        case l ~ Some("+" ~ r)      => new BinOpExpression( l, r, BinOpType.Addition )
+        case l ~ Some("-" ~ r)      => new BinOpExpression( l, r, BinOpType.Subtraction )
     })
     
     lazy val term1: Parser[Expression] = positioned(term0 ~ ((("*"|"/") ~ term1)?) ^^ {
         case e ~ None => e
-        case l ~ Some("*" ~ r)      => new Multiplication( l, r )
-        case l ~ Some("/" ~ r)      => new Division( l, r )
+        case l ~ Some("*" ~ r)      => new BinOpExpression( l, r, BinOpType.Multiplication )
+        case l ~ Some("/" ~ r)      => new BinOpExpression( l, r, BinOpType.Division )
     })
     
     lazy val term0: Parser[Expression] = positioned(factor ~ (("::" ~ term1)?) ^^ {
@@ -79,13 +79,13 @@ object CalculatorDSL extends RegexParsers with PackratParsers
             val isInteger = !lit.foldLeft(false)((x,y) => x || (y=='.'))
             if ( isInteger )
             {
-                val c = new Constant( new IntegerValue(lit.toInt) )
+                val c = new ConstantExpression( new IntegerValue(lit.toInt) )
                 c.exprType = TypeInteger
                 c
             }
             else
             {
-                val c = new Constant( new FloatValue(lit.toDouble) )
+                val c = new ConstantExpression( new FloatValue(lit.toDouble) )
                 c.exprType = TypeFloat
                 c
             }
@@ -95,7 +95,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     lazy val stringLit : Parser[Expression] = positioned(stringLiteral ^^ {
         str =>
         {
-            val c = new Constant( new StringValue( str.drop(1).dropRight(1) ) )
+            val c = new ConstantExpression( new StringValue( str.drop(1).dropRight(1) ) )
             c.exprType = TypeString
             c
         }
