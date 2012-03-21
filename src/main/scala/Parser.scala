@@ -80,13 +80,13 @@ object CalculatorDSL extends RegexParsers with PackratParsers
             if ( isInteger )
             {
                 val c = new Constant( new IntegerValue(lit.toInt) )
-                c.exprType = new TypeInteger()
+                c.exprType = TypeInteger
                 c
             }
             else
             {
                 val c = new Constant( new FloatValue(lit.toDouble) )
-                c.exprType = new TypeFloat()
+                c.exprType = TypeFloat
                 c
             }
         } 
@@ -96,7 +96,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         str =>
         {
             val c = new Constant( new StringValue( str.drop(1).dropRight(1) ) )
-            c.exprType = new TypeString()
+            c.exprType = TypeString
             c
         }
     })
@@ -106,7 +106,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     })
     
     lazy val namedType : Parser[Expression] = ident ^^ { x => new NamedTypeExpr(x) }
-    lazy val listType : Parser[Expression] = "[" ~> typeExpr <~ "]" ^^ { x => new ListTypeExpr(x) }
+    lazy val listType : Parser[Expression] = "[" ~> typeExpr <~ "]" ^^ { x => new TypeListExpr(x) }
     lazy val subType : Parser[Expression] = "(" ~> typeExpr <~ ")" ^^ { x => x }
     
     lazy val typeEl : Parser[Expression] = (namedType | listType | subType) ^^ { x => x }
@@ -123,9 +123,9 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         case clauseName ~ elementTypeNames => new VariantClauseDefinition( clauseName, elementTypeNames )
     })
     
-    lazy val variantTypeDefn : Parser[VariantTypeDefinition] = positioned(variantClause ~ (("|" ~> variantClause)*) ^^
+    lazy val variantTypeDefn : Parser[TypeVariantDefinition] = positioned(variantClause ~ (("|" ~> variantClause)*) ^^
     {
-        case firstAlternative ~ otherAlternatives => new VariantTypeDefinition( firstAlternative ::otherAlternatives)
+        case firstAlternative ~ otherAlternatives => new TypeVariantDefinition( firstAlternative ::otherAlternatives)
     })
     
     lazy val typeDefn : Parser[Expression] = positioned("@type" ~ ident ~ ((ident)*) ~ "=" ~ variantTypeDefn ^^

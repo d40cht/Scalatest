@@ -5,29 +5,28 @@ sealed abstract class ExprType
     def skipTypeRef = this
 }
 
-// TODO: These should all be objects
-case class Untyped extends ExprType
-case class TypeUnit extends ExprType
-case class TypeFloat extends ExprType
-case class TypeBoolean extends ExprType
-case class TypeInteger extends ExprType
-case class TypeString extends ExprType
+case object TypeNone extends ExprType
+case object TypeUnit extends ExprType
+case object TypeFloat extends ExprType
+case object TypeBoolean extends ExprType
+case object TypeInteger extends ExprType
+case object TypeString extends ExprType
 
-case class ListType( val elType : ExprType ) extends ExprType
+case class TypeList( val elType : ExprType ) extends ExprType
 
-case class FunctionType( val argTypes : List[ExprType], val retType : ExprType ) extends ExprType
+case class TypeFunction( val argTypes : List[ExprType], val retType : ExprType ) extends ExprType
 
-object GenericType
+object TypeGeneric
 {
     var lastId = 0
 }
 
-case class GenericType( id : Int = GenericType.lastId ) extends ExprType
+case class TypeGeneric( id : Int = TypeGeneric.lastId ) extends ExprType
 {
-    GenericType.lastId += 1
+    TypeGeneric.lastId += 1
 }
 
-case class TypeReference( val destName : String, var destType : ExprType = new Untyped() ) extends ExprType
+case class TypeReference( val destName : String, var destType : ExprType = TypeNone ) extends ExprType
 {
     override def toString = "TypeReference : " + destName
     override def skipTypeRef = destType.skipTypeRef
@@ -35,11 +34,11 @@ case class TypeReference( val destName : String, var destType : ExprType = new U
 
 //case class TupleType( val elementTypes : List[ExprType] ) extends ExprType
 
-// Need to implement typing for lists using variant types. 'ListType'[T]{ 'nil' => TypeUnit, 'cons' => TypeTuple[T]( T, ListType[T] ) }
+// Need to implement typing for lists using variant types. 'TypeList'[T]{ 'nil' => TypeUnit, 'cons' => TypeTuple[T]( T, TypeList[T] ) }
 //
 // Start with option type
-case class VariantClauseType( val name : String, val elTypes : List[ExprType], val enum : Int ) extends ExprType
-case class VariantType( val variants : List[VariantClauseType] ) extends ExprType
+case class TypeVariantClause( val name : String, val elTypes : List[ExprType], val enum : Int ) extends ExprType
+case class TypeVariant( val variants : List[TypeVariantClause] ) extends ExprType
 
 
 trait TypeVisitor
@@ -57,18 +56,18 @@ object VisitTypes
             visitor.before(exprType)
             exprType match
             {
-                case Untyped()                              =>
-                case TypeUnit()                             =>
-                case TypeFloat()                            =>
-                case TypeBoolean()                          =>
-                case TypeInteger()                          =>
-                case TypeString()                           =>
-                case ListType(elType)                       => rec(elType);
-                case FunctionType(argTypes, retType)        => argTypes.foreach( x => rec(x) ); rec(retType);
-                case GenericType(id)                        =>
+                case TypeNone                               =>
+                case TypeUnit                               =>
+                case TypeFloat                              =>
+                case TypeBoolean                            =>
+                case TypeInteger                            =>
+                case TypeString                             =>
+                case TypeList(elType)                       => rec(elType);
+                case TypeFunction(argTypes, retType)        => argTypes.foreach( x => rec(x) ); rec(retType);
+                case TypeGeneric(id)                        =>
                 case TypeReference(destName, destType)      => // Do not follow type references
-                case VariantClauseType(name, elTypes, enum) => elTypes.foreach( x => rec(x) );
-                case VariantType(variants)                  => variants.foreach( x => rec(x) );
+                case TypeVariantClause(name, elTypes, enum) => elTypes.foreach( x => rec(x) );
+                case TypeVariant(variants)                  => variants.foreach( x => rec(x) );
             }
             visitor.after(exprType)
         }
@@ -76,63 +75,6 @@ object VisitTypes
     }
 }
 
-/*
-object VisitTypes2
-{
-    def apply( exprType : ExprType, visitor : TypeVisitor ) =
-    {
-        def rec( exprType : ExprType )
-        {
-            
-            exprType match
-            {
-                case Untyped()                              =>
-                case TypeUnit()                             =>
-                case TypeFloat()                            =>
-                case TypeBoolean()                          =>
-                case TypeInteger()                          =>
-                case TypeString()                           =>
-                case FunctionType(argTypes, retType)        => argTypes.foreach( x => rec(x) ); rec(retType);
-                case GenericType(id)                        =>
-                case TypeReference(destName, destType)      => // Do not follow type references
-                case VariantClauseType(name, elTypes, enum) => elTypes.foreach( x => rec(x) );
-                case VariantType(variants)                  => variants.foreach( x => rec(x) );
-            }
-        }
-        visitor( exprType, rec(exprType) )
-    }
-}
-
-class Visitor2
-{
-    def apply( exprType : ExprType, recurse : => Unit ) =
-    {   
-        exprType match
-        {
-            case VariantType()          =>
-            {
-                println( "=== 1 ===" )
-                recurse()
-                println( "=== 2 ===" )
-            }
-            case _                      => recurse()
-        }
-    }
-}
-
-// To be applied to TypeVisitor2[Integer]
-class CountFloatTypes[Integer]
-{
-    def apply( exprType : ExprType, recurse : => Integer ) =
-    {
-        exprType match
-        {
-            case FloatType()    => 1 + recurse()
-            case _              => recurse()
-        }
-    }
-}
-*/
 
 object DumpTypes
 {
@@ -148,18 +90,18 @@ object DumpTypes
                 
                 exprType match
                 {
-                    case Untyped()                              => pr( "Untyped" )
-                    case TypeUnit()                             => pr( "Unit" )
-                    case TypeFloat()                            => pr( "Float" )
-                    case TypeBoolean()                          => pr( "Boolean" )
-                    case TypeInteger()                          => pr( "Int" )
-                    case TypeString()                           => pr( "String" )
-                    case ListType(elType)                       => pr( "List" )
-                    case FunctionType(argTypes, retType)        => pr( "Function" )
-                    case GenericType(id)                        => pr( "Generic" )
+                    case TypeNone                               => pr( "Untyped" )
+                    case TypeUnit                               => pr( "Unit" )
+                    case TypeFloat                              => pr( "Float" )
+                    case TypeBoolean                            => pr( "Boolean" )
+                    case TypeInteger                            => pr( "Int" )
+                    case TypeString                             => pr( "String" )
+                    case TypeList(elType)                       => pr( "List" )
+                    case TypeFunction(argTypes, retType)        => pr( "Function" )
+                    case TypeGeneric(id)                        => pr( "Generic" )
                     case TypeReference(destName, destType)      => pr( "TypeReference: " + destName )
-                    case VariantClauseType(name, elTypes, enum) => pr( "Clause: " + name )
-                    case VariantType(variants)                  => pr( "Variant" )
+                    case TypeVariantClause(name, elTypes, enum) => pr( "Clause: " + name )
+                    case TypeVariant(variants)                  => pr( "Variant" )
                 
                 }
                 indent += 1

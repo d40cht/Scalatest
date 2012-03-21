@@ -5,7 +5,7 @@ import scala.util.parsing.input.Positional
 
 sealed abstract class Expression extends Positional
 {
-    var exprType : ExprType = new Untyped()
+    var exprType : ExprType = TypeNone
 }
 
 case class NullExpression extends Expression
@@ -37,14 +37,14 @@ case class BlockScopeExpression( val contents : Expression ) extends Expression
 case class IfExpression( val cond : Expression, val trueBranch : Expression, val falseBranch : Expression ) extends Expression
 
 case class NamedTypeExpr( val typeName : String ) extends Expression
-case class ListTypeExpr( val elExpr : Expression ) extends Expression
+case class TypeListExpr( val elExpr : Expression ) extends Expression
 case class TypeExpr( val elements : List[Expression] ) extends Expression
 
 case class TypeAnnotation( val name : String, val theType : Expression ) extends Expression
 
 case class VariantClauseDefinition( clauseName : String, elementTypeNames : List[String] ) extends Expression
-case class VariantTypeDefinition( clauses : List[VariantClauseDefinition] ) extends Expression
-case class TypeDefinition( typeName : String, typeParameters : List[String], instanceType : VariantTypeDefinition ) extends Expression
+case class TypeVariantDefinition( clauses : List[VariantClauseDefinition] ) extends Expression
+case class TypeDefinition( typeName : String, typeParameters : List[String], instanceType : TypeVariantDefinition ) extends Expression
 
 
 abstract class ASTTransformer[T]( val default : T )
@@ -76,11 +76,11 @@ object TransformAST
                 case BlockScopeExpression( contents )               => transformer( expr, () => List( rec(contents) ) )
                 case IfExpression( cond, trueBranch, falseBranch )  => transformer( expr, () => List( rec(cond), rec(trueBranch), rec(falseBranch) ) )
                 case NamedTypeExpr( name )                                      => transformer( expr, () => Nil)
-                case ListTypeExpr( elExpr )                                     => transformer( expr, () => List( rec(elExpr) ) )
+                case TypeListExpr( elExpr )                                     => transformer( expr, () => List( rec(elExpr) ) )
                 case TypeExpr( elements )                                       => transformer( expr, () => elements.map( c => rec(c) ) )
                 case TypeAnnotation( name, theType )                            => transformer( expr, () => List ( rec(theType) ) )
                 case VariantClauseDefinition( name, elementTypes )              => transformer( expr, () => Nil)
-                case VariantTypeDefinition( clauses )                           => transformer( expr, () => clauses.map( c => rec(c) ) )
+                case TypeVariantDefinition( clauses )                           => transformer( expr, () => clauses.map( c => rec(c) ) )
                 case TypeDefinition( typeName, typeParameters, instanceType )   => transformer( expr, () => List( rec(instanceType) ) )
             }
         }
@@ -106,6 +106,7 @@ object DumpAST
                 {
                     case NullExpression()                               => pr( "Null" )
                     case Constant(v)                                    => pr( "Constant: " + v.toString )
+                    
                     case LogicalAnd(l, r)                               => pr( "LogicalAnd" ); continue();
                     case LogicalOr(l, r)                                => pr( "Division" ); continue();
                     case CmpLt(l, r)                                    => pr( "CmpLt" ); continue();
@@ -114,12 +115,12 @@ object DumpAST
                     case CmpGe(l, r)                                    => pr( "CmpGe" ); continue();
                     case CmpEq(l, r)                                    => pr( "CmpEq" ); continue();
                     case CmpNe(l, r)                                    => pr( "CmpNe" ); continue();
-                    
-                    case ListAppend(l, r)                               => pr( "ListAppend" ); continue();
                     case Addition(l, r)                                 => pr( "Addition" ); continue();
                     case Subtraction(l, r)                              => pr( "Subtraction" ); continue();
                     case Multiplication(l, r)                           => pr( "Multiplication" ); continue();
                     case Division(l, r)                                 => pr( "Division" ); continue();
+                    
+                    case ListAppend(l, r)                               => pr( "ListAppend" ); continue();
                     
                     case IdDefinition( id, params, value : Expression ) =>
                     {
@@ -133,13 +134,14 @@ object DumpAST
                     case BlockScopeExpression( contents )               => pr( "BlockScope" ); continue();
                     case IfExpression( cond, trueBranch, falseBranch )  => pr( "IfExpression" ); continue();
                     
+                    // The below are all type-related and will not appear in any AST sent out for compilation
                     case NamedTypeExpr( typeName )                                  => pr( "Named type " + typeName )
-                    case ListTypeExpr( expr )                                       => pr( "List type " ); continue();
+                    case TypeListExpr( expr )                                       => pr( "List type " ); continue();
                     case TypeExpr( elements )                                       => pr( "Type expr" ); continue();
                     case TypeAnnotation( name, typeExpr )                           => pr( "TypeAnnotation " + name ); continue();
                     
                     case VariantClauseDefinition( name, elementTypes )              => pr( "VariantClause " + name + " : " + elementTypes.mkString( " " ) ); continue();
-                    case VariantTypeDefinition( clauses )                           => pr( "VariantTypeDefinition" ); continue();
+                    case TypeVariantDefinition( clauses )                           => pr( "TypeVariantDefinition" ); continue();
                     case TypeDefinition( typeName, typeParameters, instanceType )   => pr( "TypeDefinition " + typeName + " : " + typeParameters.mkString( " " ) ); continue();
                 }
                 indent -= 1

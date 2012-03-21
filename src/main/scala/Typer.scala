@@ -8,31 +8,31 @@ object buTypeAST
     // Type names - @type foo=double etc
     class TypeNameExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType](), "Type not found" )
     {
-        set( "float", new TypeFloat() )
-        set( "int", new TypeInteger() )
-        set( "bool", new TypeBoolean() )
+        set( "float", TypeFloat )
+        set( "int", TypeInteger )
+        set( "bool", TypeBoolean )
     }
     
     // Types of ids: @def a = 12
     class IdTypeExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType](), "Identifier not found" )
     {
-        set( "nil", new ListType( new GenericType() ) )
-        set( "toString", new FunctionType( List( new GenericType() ), new TypeString() ) )
-        set( "print", new FunctionType( List( new TypeString() ), new TypeUnit() ) )
+        set( "nil", new TypeList( new TypeGeneric() ) )
+        set( "toString", new TypeFunction( List( new TypeGeneric() ), TypeString ) )
+        set( "print", new TypeFunction( List( TypeString ), TypeUnit ) )
         
         {
-            val elType = new GenericType()
-            set( "head", new FunctionType( List( new ListType(elType) ), elType ) )
+            val elType = new TypeGeneric()
+            set( "head", new TypeFunction( List( new TypeList(elType) ), elType ) )
         }
         
         {
-            val listType = new ListType( new GenericType() )
-            set( "tail", new FunctionType( List( listType ), listType ) )
+            val listType = new TypeList( new TypeGeneric() )
+            set( "tail", new TypeFunction( List( listType ), listType ) )
         }
         
         {
-            val comparisonType = new GenericType()
-            set( "assertEqual", new FunctionType( List( comparisonType, comparisonType ), new TypeUnit() ) )
+            val comparisonType = new TypeGeneric()
+            set( "assertEqual", new TypeFunction( List( comparisonType, comparisonType ), TypeUnit ) )
         }
     }
     
@@ -57,9 +57,9 @@ object buTypeAST
             {
                 (t1, t2) match
                 {
-                    case (ListType(x), ListType(y)) => typeUnion(pos, x, y); x;
-                    case (x, GenericType(_))        => x
-                    case (GenericType(_), x)        => x
+                    case (TypeList(x), TypeList(y)) => typeUnion(pos, x, y); x;
+                    case (x, TypeGeneric(_))        => x
+                    case (TypeGeneric(_), x)        => x
                     case _                          =>
                     {
                         if ( t1 != t2 ) throw new TypeError( pos, "Types do not match: %s, %s".format( t1.toString, t2.toString ) )
@@ -72,7 +72,7 @@ object buTypeAST
             {
                 expr.exprType = expr match
                 {
-                    case NullExpression()                               => new TypeUnit()
+                    case NullExpression()                               => TypeUnit
                     case Constant(v)                                    => expr.exprType
                     
                     case ListAppend(l, r)                               =>
@@ -80,9 +80,9 @@ object buTypeAST
                         continue()
                         (l.exprType, r.exprType) match
                         {
-                            case (x, ListType(y))   =>
+                            case (x, TypeList(y))   =>
                             {
-                                new ListType(typeUnion(expr.pos, x, y))
+                                new TypeList(typeUnion(expr.pos, x, y))
                             }
                             case _                  => throw new TypeError( expr.pos, "Type mismatch in list append" )
                         }
@@ -115,7 +115,7 @@ object buTypeAST
                             // up for the call and inference within the implementation.
                             idType match
                             {
-                                case Some(FunctionType( paramTypes, returnType )) =>
+                                case Some(TypeFunction( paramTypes, returnType )) =>
                                 {
                                     for ( (paramName, paramType) <- params.zip( paramTypes ) )
                                     {
@@ -143,7 +143,7 @@ object buTypeAST
                             
                             idType match
                             {
-                                case Some(FunctionType( paramTypes, returnType )) => returnType
+                                case Some(TypeFunction( paramTypes, returnType )) => returnType
                                 case _ => throw new TypeError( expr.pos, "Type inference failed for: " + id )
                             }
                         }
@@ -157,17 +157,17 @@ object buTypeAST
                             case None =>
                             {
                                 // Assume this is a generic type parameter
-                                val generic = new GenericType()
+                                val generic = new TypeGeneric()
                                 typeNames.set( typeName, generic )
                                 generic
                             }
                         }
                     }
                     
-                    case ListTypeExpr( expr )                           =>
+                    case TypeListExpr( expr )                           =>
                     {
                         continue()
-                        new ListType( expr.exprType )
+                        new TypeList( expr.exprType )
                     }
                     
                     case TypeExpr( elements )                           =>
@@ -179,7 +179,7 @@ object buTypeAST
                             case List(singleType)   => singleType
                             case _                  =>
                             {
-                                new FunctionType( elTypes.dropRight(1), elTypes.last )
+                                new TypeFunction( elTypes.dropRight(1), elTypes.last )
                             }
                         }             
                     }
@@ -191,7 +191,7 @@ object buTypeAST
                         typeNames.pop()
                         //println( "Annotating type: " + name + ", " + theType.exprType )
                         idTypes.set( name, theType.exprType )
-                        new TypeUnit()
+                        TypeUnit
                     }
                     
                     
@@ -200,7 +200,7 @@ object buTypeAST
                         continue()
                         l.exprType match
                         {
-                            case FunctionType( paramTypes, returnType ) =>
+                            case TypeFunction( paramTypes, returnType ) =>
                             {
                                 val thisType = paramTypes.head
                                 
@@ -211,7 +211,7 @@ object buTypeAST
                                 {
                                     (paramType, concreteType) match
                                     {
-                                        case (GenericType(id), _)       =>
+                                        case (TypeGeneric(id), _)       =>
                                         {
                                             typeMap.get(paramType) match
                                             {
@@ -222,8 +222,8 @@ object buTypeAST
                                                 }
                                             }
                                         }
-                                        case (ListType(x), ListType(y)) => subGenerics( x, y )
-                                        case (FunctionType(params1, ret1), FunctionType(params2, ret2)) =>
+                                        case (TypeList(x), TypeList(y)) => subGenerics( x, y )
+                                        case (TypeFunction(params1, ret1), TypeFunction(params2, ret2)) =>
                                         {
                                             (params1 zip params2).map { case (x, y) => subGenerics(x, y) }
                                             subGenerics( ret1, ret2 )
@@ -238,18 +238,18 @@ object buTypeAST
                                 {
                                     fType match
                                     {
-                                        case GenericType(id)            => typeMap.getOrElse( fType, fType )
-                                        case ListType(elType)           => new ListType( transformFn(elType) )
-                                        case FunctionType(params, ret)  => new FunctionType( params.map( x => transformFn(x) ), transformFn(ret) )
+                                        case TypeGeneric(id)            => typeMap.getOrElse( fType, fType )
+                                        case TypeList(elType)           => new TypeList( transformFn(elType) )
+                                        case TypeFunction(params, ret)  => new TypeFunction( params.map( x => transformFn(x) ), transformFn(ret) )
                                         case _                          => fType
                                     }
                                 }
                                 
-                                val newFnType = transformFn( new FunctionType( paramTypes.tail, returnType ) )                                
+                                val newFnType = transformFn( new TypeFunction( paramTypes.tail, returnType ) )                                
                                 newFnType match
                                 {
-                                    case FunctionType( List(), retType )    => retType
-                                    case FunctionType( params, retType )    => new FunctionType( params, retType )
+                                    case TypeFunction( List(), retType )    => retType
+                                    case TypeFunction( params, retType )    => new TypeFunction( params, retType )
                                     case x  => throw new TypeError( expr.pos, "Invalid type for application: " + x )
                                 }
                             }
@@ -265,18 +265,18 @@ object buTypeAST
                     {
                         // TODO: Add constructor fn into var symbols
                         continue();
-                        new VariantClauseType( name, elementTypeNames.map( tn => new TypeReference( tn, typeNames.get( expr.pos, tn ) ) ), 0 )
+                        new TypeVariantClause( name, elementTypeNames.map( tn => new TypeReference( tn, typeNames.get( expr.pos, tn ) ) ), 0 )
                     }
-                    case VariantTypeDefinition( clauses )                           =>
+                    case TypeVariantDefinition( clauses )                           =>
                     {
                         continue();
                         
                         // Remove asInstanceOf vileness
-                        val variantType = new VariantType( clauses.map( _.exprType.asInstanceOf[VariantClauseType] ).zipWithIndex.map {
+                        val variantType = new TypeVariant( clauses.map( _.exprType.asInstanceOf[TypeVariantClause] ).zipWithIndex.map {
                             // Re-map enums. Also not very nice.
                             case (x, i) =>
                             {
-                                new VariantClauseType( x.name, x.elTypes, i )
+                                new TypeVariantClause( x.name, x.elTypes, i )
                             }
                         } )
                         
@@ -296,7 +296,7 @@ object buTypeAST
                             case None =>
                             {
                                 // Assume this is a generic type parameter
-                                val generic = new GenericType()
+                                val generic = new TypeGeneric()
                                 typeNames.set( tn, generic )
                                 generic
                             }
@@ -315,7 +315,7 @@ object buTypeAST
                         // If it's a variant type defn, add the constructors to the local scope
                         instanceType.exprType match
                         {
-                            case VariantType( clauses ) =>
+                            case TypeVariant( clauses ) =>
                             {
                                 for ( clause <- clauses )
                                 {
@@ -325,16 +325,16 @@ object buTypeAST
                                     }
                                     else
                                     {
-                                        idTypes.set( clause.name, new FunctionType( clause.elTypes.map( _.skipTypeRef ), instanceType.exprType ) )
+                                        idTypes.set( clause.name, new TypeFunction( clause.elTypes.map( _.skipTypeRef ), instanceType.exprType ) )
                                     }
                                 }
                             }
                             case _ =>
                         }           
                         
-                        new TypeUnit()
+                        TypeUnit
                     }
-                    case _                                              => new TypeUnit()
+                    case _                                              => TypeUnit
                 }
             }
         }

@@ -1,3 +1,3 @@
 #!/bin/sh
 ./sbt test
-./sbt "run tests/typeable.pacatoon tests/pairsUsingPartialFunctions.pacatoon tests/test1.pacatoon tests/closuretests.pacatoon"
+./sbt "run tests/typeable.abercone tests/pairsUsingPartialFunctions.abercone tests/test1.abercone tests/closuretests.abercone"

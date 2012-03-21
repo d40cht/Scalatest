@@ -496,7 +496,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 
                 new UnitValue()
             }
-            case VariantTypeDefinition( clauses )                           =>
+            case TypeVariantDefinition( clauses )                           =>
             {
                 clauses.map( x => eval(x) )
                 new UnitValue()
