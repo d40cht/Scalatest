@@ -370,9 +370,10 @@ class CalculatorParseTest extends FunSuite
     {
         assert( exec[FloatValue](
             "@def a = (4.0+5.0)/3.0;\n" +
-            "@def b = @if (0==0) a * 2.0 @else a * 3.0\n",
+            "@def b = @if (0==0) a * 2.0 @else a * 3.0;\n" +
+            "{ @def a = b * 10.0; a+1.0 }\n",
             checkTypes=true, genByteCode=true
-        ).value === 6.0 )
+        ).value === 61.0 )
     }
     
     /*test("Record type")

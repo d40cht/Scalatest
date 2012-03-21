@@ -18,10 +18,10 @@ object ValueReference
     }
 }
 
-final class ValueReference( _name : String, userDefined : Boolean = false )
+final class ValueReference( val name : String )
 {
-    val name = if ( userDefined ) _name else _name + "_" + ValueReference.nextId.toString
-    override def toString = name
+    val id = ValueReference.nextId.toString
+    override def toString = name + "_" + id
 }
 
 sealed abstract class ByteCode
@@ -44,9 +44,14 @@ class CodeGenError( _position : Position, _msg : String ) extends PositionedExce
 
 object ByteCodeGenerator
 {
+    class IdContext extends ExecutionContextBase( () => new ContextFrame[ValueReference](), "Identifier not found" )
+    {
+    }
+    
     class CodeGenerator
     {
         private var lastId = 0
+        val idContext = new IdContext()
         
         // Register the value
         def register( value : ValueReference, instr : ByteCode ) : ValueReference =
@@ -56,17 +61,6 @@ object ByteCodeGenerator
             println( name + padding + " : " + instr.toString )
             value
         }
-        
-        // Push back instruction
-        def append( instr : ByteCode )
-        {
-        }
-        
-        def internalRef( name : String ) = new ValueReference(name)
-        
-        // This should be gotten from the local scope
-        def idRef( name : String ) = new ValueReference(name, userDefined=true)
-        
     }
     
     class Worker extends ASTTransformer[ValueReference]( new ValueReference("Null value") )
@@ -79,7 +73,7 @@ object ByteCodeGenerator
             
             expr match
             {
-                case ConstantExpression( v ) => codeGenerator.register( codeGenerator.internalRef("const"), new Constant( v ) )
+                case ConstantExpression( v ) => codeGenerator.register( new ValueReference("const"), new Constant( v ) )
                 
                 case BinOpExpression( l, r, opType ) =>
                 {
@@ -92,7 +86,7 @@ object ByteCodeGenerator
                         case _                          =>
                         {
                             val List(lVal, rVal) = continue()
-                            codeGenerator.register( codeGenerator.internalRef("binop" + opType.toString), new BinOp( lVal, rVal, opType ) )
+                            codeGenerator.register( new ValueReference("binop" + opType.toString), new BinOp( lVal, rVal, opType ) )
                         }
                     }
                 }
@@ -102,37 +96,43 @@ object ByteCodeGenerator
                     if ( params != Nil ) throw new CodeGenError( expr.pos, "Function definitions not yet supported" )
                     
                     val List(exprValue) = continue()
-                    
-                    codeGenerator.register( codeGenerator.idRef(id), new Definition(exprValue) )
+                    val idRef = new ValueReference(id)
+                    codeGenerator.idContext.set( id, idRef )
+                    codeGenerator.register( idRef, new Definition(exprValue) )
                 }
                 
                 case Apply( l, r ) => throw new CodeGenError( expr.pos, "Application not yet supported " )
                 case IdExpression( id ) =>
                 {
-                    //codeGenerator.register( codeGenerator.internalRef( "idref" ), new Definition( codeGenerator.idRef( id ) ) )
-                    codeGenerator.idRef( id )
+                    codeGenerator.idContext.get( expr.pos, id )
                 }
                 
                 case ExprList( elements ) => continue().last
-                case BlockScopeExpression( contents ) => continue().head
+                case BlockScopeExpression( contents ) =>
+                {
+                    codeGenerator.idContext.push()
+                    val last = continue().head
+                    codeGenerator.idContext.pop()
+                    last
+                }
                 
                 case IfExpression( cond, thenBranch, elseBranch ) =>
                 {
                     val condValue = rec( cond )
                     
-                    val thenBranchValue = codeGenerator.internalRef("thenLabel")
-                    val elseBranchValue = codeGenerator.internalRef("elseLabel")
-                    val phiValue = codeGenerator.internalRef("ifPhi")
+                    val thenBranchValue = new ValueReference("thenLabel")
+                    val elseBranchValue = new ValueReference("elseLabel")
+                    val phiValue = new ValueReference("ifPhi")
                     
-                    codeGenerator.register( codeGenerator.internalRef("ifbranch"), new ConditionalBranch( condValue, thenBranchValue, elseBranchValue ) )
+                    codeGenerator.register( new ValueReference("ifbranch"), new ConditionalBranch( condValue, thenBranchValue, elseBranchValue ) )
                     
                     codeGenerator.register( thenBranchValue, new Label() )
                     val thenFinalValue = rec( thenBranch )
-                    codeGenerator.register( codeGenerator.internalRef("exit"), new Branch( phiValue ) )
+                    codeGenerator.register( new ValueReference("exit"), new Branch( phiValue ) )
                     
                     codeGenerator.register( elseBranchValue, new Label() )
                     val elseFinalValue = rec( elseBranch )
-                    codeGenerator.register( codeGenerator.internalRef("exit"), new Branch( phiValue ) )
+                    codeGenerator.register( new ValueReference("exit"), new Branch( phiValue ) )
                     
                     codeGenerator.register( phiValue, new Phi( List(thenFinalValue, elseFinalValue) ) )
                 }
