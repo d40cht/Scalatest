@@ -44,7 +44,7 @@ class CodeGenError( _position : Position, _msg : String ) extends PositionedExce
 
 object ByteCodeGenerator
 {
-    class IdContext extends ExecutionContextBase( () => new ContextFrame[ValueReference](), "Identifier not found" )
+    class IdContext extends ExecutionContextBase( () => new ContextFrame[Identifier, ValueReference](), "Identifier not found" )
     {
     }
     
@@ -108,7 +108,7 @@ object ByteCodeGenerator
                     }
                 }
                 
-                case NamedIdDefinition( id, params, value : Expression ) =>
+                case IdDefinition( id, params, value : Expression ) =>
                 {
                     if ( params != Nil )
                     {
@@ -120,14 +120,14 @@ object ByteCodeGenerator
                     else
                     {
                         val List(exprValue) = continue()
-                        val idRef = new ValueReference(id)
+                        val idRef = new ValueReference(id.name)
                         codeGenerator.idContext.set( id, idRef )
                         codeGenerator.register( idRef, new Definition(exprValue) )
                     }
                 }
                 
                 case Apply( l, r ) => throw new CodeGenError( expr.pos, "Application not yet supported " )
-                case NamedIdExpression( id ) =>
+                case IdExpression( id ) =>
                 {
                     codeGenerator.idContext.get( expr.pos, id )
                 }

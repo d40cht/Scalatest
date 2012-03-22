@@ -125,7 +125,7 @@ object DumpAST
             
             override def apply( expr : Expression, continue : () => List[Unit], rec : Expression => Unit )
             {
-                def pr( s : String ) = println( ("| "*indent) + s )// + " : " + expr.getType.toString )
+                def pr( s : String ) = println( ("| "*indent) + s + " : " + expr.getType.toString )
                 
                 indent += 1
                 expr match

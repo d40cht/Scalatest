@@ -39,7 +39,7 @@ case class BuiltInFunction( numArgs : Int, fn : (Position, List[BaseValue]) => B
     override def toString = "builtin"
 }
 
-case class FunctionValue( params : List[String], body : Expression ) extends BaseValue
+case class FunctionValue( params : List[Identifier], body : Expression ) extends BaseValue
 {
     override def toString = "fn"
 }
@@ -86,85 +86,9 @@ class AssertionFailure( _position : Position, _msg : String ) extends Positioned
 
 
 
-class ValueExecutionContext extends ExecutionContextBase( () => new ContextFrame[BaseValue](), "Identifier not found" )
+class ValueExecutionContext extends ExecutionContextBase( () => new ContextFrame[Identifier, BaseValue](), "Identifier not found" )
 {
-    // Add built-ins
-    {
-        set( "import", new BuiltInFunction( 1, (pos, args) =>
-        {
-            if ( args.length != 1 ) throw new TypeError( pos, "import function takes only one parameter" )
-            
-            args(0) match
-            {
-                case StringValue(fname) =>
-                {
-                    val f = scala.io.Source.fromFile( fname )
-                    val str = f.mkString
-                    f.close()
-                    val parsed = CalculatorDSL.parse( str )
-                    
-                    val evaluator = new DynamicASTEvaluator(this)
-                    evaluator.eval( parsed )
-                }
-                case _ => throw new TypeError( pos, "import function requires a string parameter" )
-            }
-            new UnitValue();
-        } ) )
-        
-        set( "assertEqual", new BuiltInFunction( 2, (pos, args) =>
-        {
-            if ( args.length != 2 ) throw new TypeError( pos, "assertEqual function takes two parameters" )
-            val (a, b) = (args(0), args(1))
-            if ( a != b )
-            {
-                throw new AssertionFailure( pos, a.toString + " != " + b.toString )
-            }
-            else
-            {
-                println( "[Assertion passed]" )
-            }
-            new UnitValue();
-        } ) )
-        
-        set( "print", new BuiltInFunction( 1, (pos, args) =>
-        {
-            if ( args.length != 1 ) throw new TypeError( pos, "print function takes only one parameter" )
-            println( args(0) );
-            new UnitValue();
-        } ) )
-        
-        set( "toString", new BuiltInFunction( 1, (pos, args) =>
-        {
-            if ( args.length != 1 ) throw new TypeError( pos, "toString function takes only one parameter" )
-            new StringValue( args(0).toString )
-        } ) )
-        
-        set( "nil", new ListTerminatorValue() )
-        
-        set( "head", new BuiltInFunction( 1, (pos, args) =>
-        {
-            if ( args.length != 1 ) throw new TypeError( pos, "head function takes only one parameter" )
-            
-            args(0) match
-            {
-                case ListElementValue( head, tail ) => head
-                case ListTerminatorValue() => throw new TypeError( pos, "Calling head on empty list" )
-                case _ => throw new TypeError( pos, "Calling head on non-list type" )
-            }
-        } ) )
-        
-        set( "tail", new BuiltInFunction( 1, (pos, args) =>
-        {
-            if ( args.length != 1 ) throw new TypeError( pos, "tail function takes only one parameter" )
-            
-            args(0) match
-            {
-                case ListElementValue( head, tail ) => tail
-                case ListTerminatorValue() => throw new TypeError( pos, "Calling head on empty list" )
-                case _ => throw new TypeError( pos, "Calling head on non-list type" )
-            }
-        } ) )
-    }
+    Intrinsics.members.foreach( m => set( m.id, m.value ) )
 }
 
 class ValueEvaluator
@@ -338,11 +262,11 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
     
     // These should be by reference. Functional == immutable, so should be the same as by value but with
     // better memory usage. Also it's incorrect - is able to look at calling function stack frames for vars atm.
-    def bindClosureLocals( paramNames : List[String], expr : Expression ) : Expression =
+    def bindClosureLocals( params : List[Identifier], expr : Expression ) : Expression =
     {
         context.push()
         // Any variables with the same name as function params must not be bound to outer scopes
-        paramNames.foreach( param => context.set( param, new UnitValue() ) )
+        params.foreach( param => context.set( param, new UnitValue() ) )
         
         def bindRec( expr : Expression ) : Expression =
         {
@@ -354,10 +278,10 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 case BinOpExpression( left, right, op ) => new BinOpExpression( bindRec(left), bindRec(right), op )
                 case ListAppend( left, right )          => new ListAppend( bindRec(left), bindRec(right) )
                 
-                case NamedIdDefinition( name, args, value )  => new NamedIdDefinition( name, args, bindRec( value ) )
-                case NamedIdExpression( name )               =>
+                case IdDefinition( id, args, value )  => new IdDefinition( id, args, bindRec( value ) )
+                case IdExpression( id )               =>
                 {
-                    val res = context.getOption(name)
+                    val res = context.getOption(id)
                     res match
                     {
                         case None               => expr
@@ -369,9 +293,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 case ExprList( elements )               => new ExprList( elements.map( x => bindRec(x) ) )
                 case BlockScopeExpression( contents )   => 
                 {
-                    context.push()
                     val res = bindRec( contents )
-                    context.pop()
                     
                     new BlockScopeExpression( res )
                 }
@@ -440,18 +362,18 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
             
             case ListAppend( left, right )          => new ListElementValue( eval(left), eval(right) )
             
-            case NamedIdDefinition( name, params, value )  =>
+            case IdDefinition( id, params, value )  =>
             {
                 val rhs = params match
                 {
                     case Nil => simplify( pos, eval(value) )
                     case _   => new FunctionValue( params, bindClosureLocals( params, value ) )
                 }
-                context.set( name, rhs )
+                context.set( id, rhs )
                 
                 rhs
             }
-            case NamedIdExpression( name )           => context.get(pos, name)
+            case IdExpression( id )           => context.get(pos, id)
             case Apply( lhs, rhs )              =>
             {
                 simplify( pos, new ApplicationValue( eval(lhs), eval(rhs) ) )
@@ -475,7 +397,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 }
             }
             
-            case NamedTypeAnnotation( name, typeNames )                          => new UnitValue()
+            /*case NamedTypeAnnotation( name, typeNames )                          => new UnitValue()
             
             // Build a function to generate a VariantValue
             case VariantClauseDefinition( name, elementTypes )              =>
@@ -498,7 +420,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
             {
                 eval(instanceType)
                 new UnitValue()
-            }
+            }*/
             
             case _ => new UnitValue()
         }

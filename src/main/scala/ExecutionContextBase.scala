@@ -3,17 +3,17 @@ package org.seacourt.pacatoon
 import scala.util.parsing.input.Position
 import scala.collection.{mutable, immutable}
 
-class ContextFrame[T]
+class ContextFrame[K, T]
 {
-    var symbols = new immutable.HashMap[String, T]()
-    def set( id : String, value : T )
+    var symbols = new immutable.HashMap[K, T]()
+    def set( id : K, value : T )
     {
         symbols += id -> value
     }
-    def get( id : String ) = symbols.get(id)
+    def get( id : K ) = symbols.get(id)
 }
 
-class ExecutionContextBase[T]( val makeFrame : () => ContextFrame[T], val errorMessage : String )
+class ExecutionContextBase[K, T]( val makeFrame : () => ContextFrame[K, T], val errorMessage : String )
 {
     var stack = List( makeFrame() )
     
@@ -27,11 +27,11 @@ class ExecutionContextBase[T]( val makeFrame : () => ContextFrame[T], val errorM
         stack = stack.tail
     }
     
-    def set( id : String, value : T ) = { stack.head.set( id, value ) }
+    def set( id : K, value : T ) = { stack.head.set( id, value ) }
     
-    def getOption( id : String ) =
+    def getOption( id : K ) =
     {
-        def getRec( id : String, stack : List[ContextFrame[T]] ) : Option[T] = stack.head.get(id) match
+        def getRec( id : K, stack : List[ContextFrame[K, T]] ) : Option[T] = stack.head.get(id) match
         {
             case Some(value) => Some(value)
             case _ =>
@@ -44,7 +44,7 @@ class ExecutionContextBase[T]( val makeFrame : () => ContextFrame[T], val errorM
         getRec( id, stack )
     }
     
-    def get( pos : Position, id : String ) =
+    def get( pos : Position, id : K ) =
     {
         getOption( id ) match
         {

@@ -6,36 +6,12 @@ import scala.util.parsing.input.Position
 object buTypeAST
 {
     // Type names - @type foo=double etc
-    class TypeNameExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType](), "Type not found" )
+    class TypeNameExecutionContext extends ExecutionContextBase( () => new ContextFrame[String, ExprType](), "Type not found" )
     {
         set( "float", TypeFloat )
         set( "int", TypeInteger )
         set( "bool", TypeBoolean )
     }
-    
-    // Types of ids: @def a = 12
-    class IdTypeExecutionContext extends ExecutionContextBase( () => new ContextFrame[ExprType](), "Identifier not found" )
-    {
-        set( "nil", new TypeList( new TypeGeneric() ) )
-        set( "toString", new TypeFunction( List( new TypeGeneric() ), TypeString ) )
-        set( "print", new TypeFunction( List( TypeString ), TypeUnit ) )
-        
-        {
-            val elType = new TypeGeneric()
-            set( "head", new TypeFunction( List( new TypeList(elType) ), elType ) )
-        }
-        
-        {
-            val listType = new TypeList( new TypeGeneric() )
-            set( "tail", new TypeFunction( List( listType ), listType ) )
-        }
-        
-        {
-            val comparisonType = new TypeGeneric()
-            set( "assertEqual", new TypeFunction( List( comparisonType, comparisonType ), TypeUnit ) )
-        }
-    }
-    
     
     def apply( expr : Expression )
     {
@@ -197,7 +173,7 @@ object buTypeAST
                     {
                         continue()
                         
-                        expr.getType match
+                        l.getType match
                         {
                             case TypeFunction( paramTypes, returnType ) =>
                             {
@@ -335,6 +311,7 @@ object buTypeAST
                     }
                     case _                                              => TypeUnit
                 }
+                expr.setType( exprType )
             }
         }
         

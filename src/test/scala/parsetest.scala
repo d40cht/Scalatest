@@ -2,33 +2,36 @@ import org.scalatest.FunSuite
 
 import org.seacourt.pacatoon._
 
-
-class CalculatorParseTest extends FunSuite
+class BaseParseTest extends FunSuite
 {
-    def exec[T]( str : String, dump : Boolean = true, checkTypes : Boolean = true, genByteCode : Boolean = false ) =
+    def exec[T]( str : String, dump : Boolean = false, checkTypes : Boolean = false, genByteCode : Boolean = false ) =
     {
         val parsed = CalculatorDSL.parse( str )
+        if (dump) DumpAST( parsed )
         val ssaResolved = NameAliasResolution( parsed )
         if (dump) DumpAST( ssaResolved )
         if (checkTypes) buTypeAST( ssaResolved )
-        //if (dump) DumpAST( ssaResolved )
+        if (dump) DumpAST( ssaResolved )
         if (genByteCode) bytecode.ByteCodeGenerator( ssaResolved )
         val execContext = new ValueExecutionContext()
         val evaluator = new DynamicASTEvaluator( execContext )
         
         evaluator.eval( ssaResolved ).asInstanceOf[T]
     }
-    
-    test("Simple parse test 1")
+}
+
+class CalculatorParseTest extends BaseParseTest
+{
+    test("Simple expression test 1")
     {
         assert( exec[FloatValue]( "(4.0+5.0)/3.0" ).value === 3.0 )
-        /*assert( exec[FloatValue]( "1.0+2.0+3.0" ).value === 6.0 )
+        assert( exec[FloatValue]( "1.0+2.0+3.0" ).value === 6.0 )
         assert( exec[FloatValue]( "1.0*2.0*3.0" ).value === 6.0 )
         assert( exec[FloatValue]( "2.0+3.0*3.0").value === 11.0 )
-        assert( exec[FloatValue]( "2.0*3.0+3.0").value === 9.0 )*/
+        assert( exec[FloatValue]( "2.0*3.0+3.0").value === 9.0 )
     }
-        
-    test("Simple parse test 2")
+    
+    test("Simple expression test 2")
     {
         assert( exec[BooleanValue]( "4.0 < 5.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 <= 5.0" ).value === true )
@@ -45,12 +48,13 @@ class CalculatorParseTest extends FunSuite
         assert( exec[BooleanValue]( "4.0 != 4.0" ).value === false )
         
         assert( exec[IntegerValue]( "4 * 5" ).value === 20 )
-        
-        
-        //assert( exec[FloatValue]( "@def x : float = 4.0; x" ).value === 4.0 )
-        //assert( exec[IntegerValue]( "@def x : int = 4; x" ).value === 4 )
     }
+}
+
+
     
+class VariableParseTest extends BaseParseTest
+{   
     test("Simple parse test 3")
     {
         assert( exec[FloatValue]( "@def x = 12.0; x" ).value === 12.0 )
@@ -68,8 +72,12 @@ class CalculatorParseTest extends FunSuite
         assert( exec[FloatValue]( "@def y = 10.0; { @def y = 13.0; y }" ).value === 13.0 )
         assert( exec[FloatValue]( "@def y = 10.0; @def z = y; z" ).value === 10.0 )
     }
+}
     
+class CalculatorParseTest2 extends BaseParseTest
+{
     val mapFn = 
+        "@def map :: (a -> b) -> [a] -> [b];\n" +
         "@def map fn l =" +
         "{" +
         "    @if (l == nil) nil" +
@@ -96,13 +104,15 @@ class CalculatorParseTest extends FunSuite
     
     test("Simple function calls")
     {
-        assert( exec[FloatValue]( 
-            "@def double x = x * 2.0;" +
+        assert( exec[FloatValue](
+            "@def double :: float -> float;\n" +
+            "@def double x = x * 2.0;\n" +
             "double 5.0"
         ).value === 10.0 )
         
         assert( exec[FloatValue]( 
-            "@def sum x y = x + y;" +
+            "@def sum :: float -> float -> float;\n" +
+            "@def sum x y = x + y;\n" +
             "sum 3.0 5.0"
         ).value === 8.0 )
     }
@@ -114,8 +124,9 @@ class CalculatorParseTest extends FunSuite
     
     test("Function calls with arithmetic expressions as arguments")
     {
-        assert( exec[FloatValue]( 
-            "@def sum x y = x + y;" +
+        assert( exec[FloatValue](
+            "@def sum :: float -> float -> float;\n" + 
+            "@def sum x y = x + y;\n" +
             "sum 2.0+1.0 2.0+3.0"
         ).value === 8.0 )
     }
@@ -123,7 +134,8 @@ class CalculatorParseTest extends FunSuite
     test("Partial application syntax (sort of)")
     {
         assert( exec[FloatValue]( 
-            "@def sum x y = x + y;" +
+            "@def sum :: float -> float -> float;\n" +
+            "@def sum x y = x + y;\n" +
             "(sum 3.0) 5.0"
         ).value === 8.0 )
     }
@@ -131,9 +143,10 @@ class CalculatorParseTest extends FunSuite
     test("Simple function calls with variables as args")
     {
         assert( exec[FloatValue]( 
-            "@def sum x y = x + y;" +
-            "@def p = 3.0;" +
-            "@def q = 5.0;" +
+            "@def sum :: float -> float -> float;\n" +
+            "@def sum x y = x + y;\n" +
+            "@def p = 3.0;\n" +
+            "@def q = 5.0;\n" +
             "sum p q"
         ).value === 8.0 )
     }
@@ -141,7 +154,8 @@ class CalculatorParseTest extends FunSuite
     test("Simple recursion")
     {   
         assert( exec[FloatValue]( 
-            "@def sumSeries x = @if (x==0.0) 0.0 @else x+(sumSeries (x + (-1.0)));" +
+            "@def sumSeries :: float -> float;\n" +
+            "@def sumSeries x = @if (x==0.0) 0.0 @else x+(sumSeries (x + (-1.0)));\n" +
             "sumSeries 5.0"
         ).value === 15.0 )
     }
@@ -149,8 +163,9 @@ class CalculatorParseTest extends FunSuite
     test("Function as a first class object" )
     {
         assert( exec[FloatValue]( 
-            "@def sum x y = x + y;" +
-            "@def sumcp = sum;" +
+            "@def sum :: float -> float -> float;\n" +
+            "@def sum x y = x + y;\n" +
+            "@def sumcp = sum;\n" +
             "sumcp 3.0 5.0"
         ).value === 8.0 )     
     }
@@ -158,16 +173,20 @@ class CalculatorParseTest extends FunSuite
     test("Partial function application" )
     {
         assert( exec[IntegerValue](
-            "@def sum x y = x + y;" +
-            "@def inc = sum 1;" +
+            "@def sum :: float -> float -> float;\n" +
+            "@def sum x y = x + y;\n" +
+            "@def inc = sum 1;\n" +
             "inc 4" ).value === 5 )
     }
     
     test("Function as function parameter" )
     {
         assert( exec[FloatValue](
-            "@def sum x y = x + y;" +
-            "@def mul x y = x * y;" +
+            "@def sum :: float -> float -> float;\n" +
+            "@def mul :: float -> float -> float;\n" +
+            "@def apply :: (float -> float -> float) -> float -> float -> float;\n" +
+            "@def sum x y = x + y;\n" +
+            "@def mul x y = x * y;\n" +
             "@def apply fn x y = fn x y;" +
             "(apply sum 2.0 3.0) + (apply mul 4.0 5.0)"
         ).value === 25.0 )
@@ -209,17 +228,6 @@ class CalculatorParseTest extends FunSuite
         ).value === 16.0 )
     }
     
-    /*test( "Closures2: Manual (out of order) partial application" )
-    {
-        assert( exec[FloatValue](
-            "@def divide x y = x / y;" +
-            "@def fixedDivide x = (@def _ y = divide y / x);" +
-            "@def halve = fixedDivide 2.0;" +
-            "@def third = fixedDivide 3.0;" +
-            "(halve 16.0) + (third 9.0)"
-        ).value === 11.0 )
-    }*/
-    
     test("Blocks")
     {
         assert( exec[FloatValue]( "{ 1.0; 2.0; 3.0; 4.0 }" ).value === 4.0 )
@@ -236,11 +244,11 @@ class CalculatorParseTest extends FunSuite
     test("Functional tools: foldLeft")
     {
         assert( exec[FloatValue](
-            "@def foldLeft fn acc l =" +
-            "{" +
-            "    @if (l == nil) acc" +
-            "    @else (fn (head l) (foldLeft fn acc (tail l)))" +
-            "};" +
+            "@def foldLeft fn acc l =\n" +
+            "{\n" +
+            "    @if (l == nil) acc\n" +
+            "    @else (fn (head l) (foldLeft fn acc (tail l)))\n" +
+            "};\n" +
             "foldLeft (@def sum x y=x+y) 0.0 (1.0::2.0::3.0::4.0::nil)"
         ).value === 10.0 )
     }
@@ -322,14 +330,8 @@ class CalculatorParseTest extends FunSuite
         ).value == 12.0 )
     }*/
     
-    test( "Simple variant type" )
+    /*test( "Simple variant type" )
     {
-        /*assert( exec[FloatValue](
-            "@type ListElement a = Terminal | Cons a (ListElement a);"
-            "12.0", dump=true, checkTypes=true
-        ).value == 12.0 )*/
-        
-        
         // Use cases:
         // * Create a variant by name - add each Ctor to the in-scope vars
         // * Infer types from the variant - should work similarly to fn type inference
@@ -367,13 +369,13 @@ class CalculatorParseTest extends FunSuite
             //"@def t11 = Cons 3.0 $ Cons 4.0 $ Cons 5.0 Terminal;\n" +
             
             // Pattern matching?
-            /*"@def headOrZero :: FloatList -> float;\n" +
-            "@def headOrZero v = @match v { case Terminal -> 0.0; case Cons v -> v };\n" +
-            "headOrZero c",*/
+            //"@def headOrZero :: FloatList -> float;\n" +
+            //"@def headOrZero v = @match v { case Terminal -> 0.0; case Cons v -> v };\n" +
+            //"headOrZero c",
             "5.0",
             checkTypes=true
         ).value == 5.0 )
-    }
+    }*/
     
     test("Byte code generation")
     {

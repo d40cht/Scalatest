@@ -3,12 +3,18 @@ package org.seacourt.pacatoon
 import scala.util.parsing.input.Position
 
 
+class IdentifierStackWithIntrinsics extends ExecutionContextBase( () => new ContextFrame[String, Identifier](), "Identifier not found" )
+{
+    // Add intrinsic functions to outermost scope
+    Intrinsics.members.foreach( m => set( m.name, m.id ) )
+}
+
 // Lifts all functions (local/lambda) up to the top level
 object NameAliasResolution
 {
     class Worker extends ASTTransformer[Expression](new NullExpression())
     {
-        val identifierStack = new ExecutionContextBase( () => new ContextFrame[Identifier](), "Identifier not found" )
+        val identifierStack = new IdentifierStackWithIntrinsics()
         
         override def apply( expr : Expression, continue : () => List[Expression], rec : Expression => Expression ) : Expression =
         {
@@ -29,20 +35,9 @@ object NameAliasResolution
                 
                 case NamedIdDefinition( idName, paramNames, value : Expression ) =>
                 {   
-                    identifierStack.push()
-                    val paramIds = paramNames.map( pn =>
-                    {
-                        val pId = new Identifier( pn )
-                        identifierStack.set( pn, pId )
-                        pId
-                    } )
-                    val List(tv) = continue()
-                    identifierStack.pop()
-                 
-
                     // If this id is a function, it must already have had a type annotation
                     // so the id must exist                    
-                    val theId = if ( paramIds == Nil )
+                    val theId = if ( paramNames == Nil )
                     {
                         val newId = new Identifier( idName )
                         identifierStack.set( idName, newId )
@@ -53,9 +48,26 @@ object NameAliasResolution
                         identifierStack.getOption( idName ) match
                         {
                             case Some(id)   => id
-                            case None       => throw new TypeError( expr.pos, "Function definition without type annotation: " + idName )
+                            case None       =>
+                            {
+                                val newId = new Identifier( idName )
+                                identifierStack.set( idName, newId )
+                                newId
+                                //throw new TypeError( expr.pos, "Function definition without type annotation: " + idName )
+                            }
                         }
                     }
+                    
+                    // Note: we registered the id first, in case the function is recursive
+                    identifierStack.push()
+                    val paramIds = paramNames.map( pn =>
+                    {
+                        val pId = new Identifier( pn )
+                        identifierStack.set( pn, pId )
+                        pId
+                    } )
+                    val List(tv) = continue()
+                    identifierStack.pop()
                     
                     new IdDefinition( theId, paramIds, tv )
                 }
@@ -68,6 +80,7 @@ object NameAliasResolution
                 case NamedTypeAnnotation( idName, typeExpr )          =>
                 {
                     val theId = new Identifier( idName )
+                    identifierStack.set( idName, theId )
                     new TypeAnnotation( theId, typeExpr )
                 }
                 
