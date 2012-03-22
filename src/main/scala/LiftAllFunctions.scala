@@ -27,19 +27,19 @@ object LiftAllFunctions
                     new ListAppend( tl, tr )
                 }
                 
-                case IdDefinition( id, params, value : Expression ) =>
+                case NamedIdDefinition( id, params, value : Expression ) =>
                 {
                     nameStack = id :: nameStack
                     val List(tv) = continue()
                     nameStack = nameStack.tail
                     if ( params == Nil )
                     {
-                        new IdDefinition( id, params, tv )
+                        new NamedIdDefinition( id, params, tv )
                     }
                     else
                     {
                         // TODO
-                        new IdDefinition( id, params, tv )
+                        new NamedIdDefinition( id, params, tv )
                     }
                     
                 }
@@ -48,7 +48,7 @@ object LiftAllFunctions
                     val List( tl, tr ) = continue()
                     new Apply( tl, tr )
                 }
-                case IdExpression( id )                             =>
+                case NamedIdExpression( id )                             =>
                 {
                     // TODO: What scope does this id come from?
                     expr

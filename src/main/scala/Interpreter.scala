@@ -9,7 +9,7 @@ sealed abstract class BaseValue
     def toString : String
 }
 
-case class UnitValue extends BaseValue
+case class UnitValue() extends BaseValue
 {
     override def toString = "unit"
 }
@@ -24,7 +24,7 @@ case class BooleanValue( val value : Boolean ) extends BaseValue
     override def toString = value.toString
 }
 
-case class IntegerValue( val value : Integer ) extends BaseValue
+case class IntegerValue( val value : Int ) extends BaseValue
 {
     override def toString = value.toString
 }
@@ -354,8 +354,8 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 case BinOpExpression( left, right, op ) => new BinOpExpression( bindRec(left), bindRec(right), op )
                 case ListAppend( left, right )          => new ListAppend( bindRec(left), bindRec(right) )
                 
-                case IdDefinition( name, args, value )  => new IdDefinition( name, args, bindRec( value ) )
-                case IdExpression( name )               =>
+                case NamedIdDefinition( name, args, value )  => new NamedIdDefinition( name, args, bindRec( value ) )
+                case NamedIdExpression( name )               =>
                 {
                     val res = context.getOption(name)
                     res match
@@ -376,12 +376,12 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                     new BlockScopeExpression( res )
                 }
                 case IfExpression( cond, trueBranch, falseBranch )  => new IfExpression( bindRec(cond), bindRec(trueBranch), bindRec(falseBranch) )
-                case TypeAnnotation( name, typeNames )              => expr
+                case NamedTypeAnnotation( name, typeNames )              => expr
                 case _ => expr
             }
             
             res.setPos( expr.pos )
-            res.exprType = expr.exprType
+            res.setType( expr.getType )
             
             res
         }
@@ -440,7 +440,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
             
             case ListAppend( left, right )          => new ListElementValue( eval(left), eval(right) )
             
-            case IdDefinition( name, params, value )  =>
+            case NamedIdDefinition( name, params, value )  =>
             {
                 val rhs = params match
                 {
@@ -451,7 +451,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 
                 rhs
             }
-            case IdExpression( name )           => context.get(pos, name)
+            case NamedIdExpression( name )           => context.get(pos, name)
             case Apply( lhs, rhs )              =>
             {
                 simplify( pos, new ApplicationValue( eval(lhs), eval(rhs) ) )
@@ -475,7 +475,7 @@ class DynamicASTEvaluator( val context : ValueExecutionContext )
                 }
             }
             
-            case TypeAnnotation( name, typeNames )                          => new UnitValue()
+            case NamedTypeAnnotation( name, typeNames )                          => new UnitValue()
             
             // Build a function to generate a VariantValue
             case VariantClauseDefinition( name, elementTypes )              =>

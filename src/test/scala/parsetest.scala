@@ -5,40 +5,31 @@ import org.seacourt.pacatoon._
 
 class CalculatorParseTest extends FunSuite
 {
-    def exec[T]( str : String, dump : Boolean = false, checkTypes : Boolean = false, genByteCode : Boolean = false ) =
+    def exec[T]( str : String, dump : Boolean = true, checkTypes : Boolean = true, genByteCode : Boolean = false ) =
     {
         val parsed = CalculatorDSL.parse( str )
-        if (checkTypes) buTypeAST( parsed )
-        if (dump) DumpAST( parsed )
-        if (genByteCode) bytecode.ByteCodeGenerator( parsed )
+        val ssaResolved = NameAliasResolution( parsed )
+        if (dump) DumpAST( ssaResolved )
+        if (checkTypes) buTypeAST( ssaResolved )
+        //if (dump) DumpAST( ssaResolved )
+        if (genByteCode) bytecode.ByteCodeGenerator( ssaResolved )
         val execContext = new ValueExecutionContext()
         val evaluator = new DynamicASTEvaluator( execContext )
         
-        evaluator.eval( parsed ).asInstanceOf[T]
+        evaluator.eval( ssaResolved ).asInstanceOf[T]
     }
     
-    test("Simple parse test")
+    test("Simple parse test 1")
     {
         assert( exec[FloatValue]( "(4.0+5.0)/3.0" ).value === 3.0 )
-        assert( exec[FloatValue]( "1.0+2.0+3.0" ).value === 6.0 )
+        /*assert( exec[FloatValue]( "1.0+2.0+3.0" ).value === 6.0 )
         assert( exec[FloatValue]( "1.0*2.0*3.0" ).value === 6.0 )
         assert( exec[FloatValue]( "2.0+3.0*3.0").value === 11.0 )
-        assert( exec[FloatValue]( "2.0*3.0+3.0").value === 9.0 )
-        assert( exec[FloatValue]( "@def x = 12.0; x" ).value === 12.0 )
-        assert( exec[FloatValue]( "@def x = 12.0; x * x" ).value === 144.0 )
-        assert( exec[FloatValue]( "3.0 ; 4.0 ; 5.0" ).value === 5.0 )
+        assert( exec[FloatValue]( "2.0*3.0+3.0").value === 9.0 )*/
+    }
         
-        assert( exec[FloatValue](
-            "@def y = 10.0;" +
-            "@def z = 13.0;" +
-            "y * z"
-        ).value === 130 )
-        
-        assert( exec[FloatValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).value === 3.0 )
-        assert( exec[FloatValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).value === 7.0 )
-        assert( exec[FloatValue]( "@def y = 10.0; { @def y = 13.0; y }" ).value === 13.0 )
-        assert( exec[FloatValue]( "@def y = 10.0; @def z = y; z" ).value === 10.0 )
-        
+    test("Simple parse test 2")
+    {
         assert( exec[BooleanValue]( "4.0 < 5.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 <= 5.0" ).value === true )
         assert( exec[BooleanValue]( "4.0 > 5.0" ).value === false )
@@ -58,6 +49,24 @@ class CalculatorParseTest extends FunSuite
         
         //assert( exec[FloatValue]( "@def x : float = 4.0; x" ).value === 4.0 )
         //assert( exec[IntegerValue]( "@def x : int = 4; x" ).value === 4 )
+    }
+    
+    test("Simple parse test 3")
+    {
+        assert( exec[FloatValue]( "@def x = 12.0; x" ).value === 12.0 )
+        assert( exec[FloatValue]( "@def x = 12.0; x * x" ).value === 144.0 )
+        assert( exec[FloatValue]( "3.0 ; 4.0 ; 5.0" ).value === 5.0 )
+        
+        assert( exec[FloatValue](
+            "@def y = 10.0;" +
+            "@def z = 13.0;" +
+            "y * z"
+        ).value === 130 )
+        
+        assert( exec[FloatValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 } } }" ).value === 3.0 )
+        assert( exec[FloatValue]( "{ 4.0; { 5.0; { 1.0; 2.0; 3.0 }; 6.0 }; 7.0 }" ).value === 7.0 )
+        assert( exec[FloatValue]( "@def y = 10.0; { @def y = 13.0; y }" ).value === 13.0 )
+        assert( exec[FloatValue]( "@def y = 10.0; @def z = y; z" ).value === 10.0 )
     }
     
     val mapFn = 

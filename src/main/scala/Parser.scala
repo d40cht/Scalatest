@@ -68,7 +68,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         case l ~ Some("::" ~ r)     => new ListAppend( l, r )
     })
     
-    lazy val idExpression : Parser[Expression] = positioned(ident ^^ { x => new IdExpression(x) })
+    lazy val idExpression : Parser[Expression] = positioned(ident ^^ { x => new NamedIdExpression(x) })
     
     lazy val factor: Parser[Expression] = positioned(blockScope | controlFlow | typeAnnotation | typeDefn | defn | fpLit | stringLit | "(" ~> expr <~ ")" ^^ { e => e } | idExpression ^^ { e => e })
     
@@ -80,13 +80,13 @@ object CalculatorDSL extends RegexParsers with PackratParsers
             if ( isInteger )
             {
                 val c = new ConstantExpression( new IntegerValue(lit.toInt) )
-                c.exprType = TypeInteger
+                c.setType( TypeInteger )
                 c
             }
             else
             {
                 val c = new ConstantExpression( new FloatValue(lit.toDouble) )
-                c.exprType = TypeFloat
+                c.setType( TypeFloat )
                 c
             }
         } 
@@ -96,13 +96,13 @@ object CalculatorDSL extends RegexParsers with PackratParsers
         str =>
         {
             val c = new ConstantExpression( new StringValue( str.drop(1).dropRight(1) ) )
-            c.exprType = TypeString
+            c.setType( TypeString )
             c
         }
     })
  
     lazy val defn : Parser[Expression] = positioned("@def" ~ ident ~ ((ident)*) ~ "=" ~ expr ^^ {
-        case "@def" ~ id ~ params ~ "=" ~ e => new IdDefinition( id, params, e )
+        case "@def" ~ id ~ params ~ "=" ~ e => new NamedIdDefinition( id, params, e )
     })
     
     lazy val namedType : Parser[Expression] = ident ^^ { x => new NamedTypeExpr(x) }
@@ -115,7 +115,7 @@ object CalculatorDSL extends RegexParsers with PackratParsers
     }
     
     lazy val typeAnnotation : Parser[Expression] = positioned("@def" ~ ident ~ "::" ~ typeExpr ^^ {
-        case "@def" ~ id ~ "::" ~ typeExpr => new TypeAnnotation( id, typeExpr )
+        case "@def" ~ id ~ "::" ~ typeExpr => new NamedTypeAnnotation( id, typeExpr )
     })
     
     lazy val variantClause : Parser[VariantClauseDefinition] = positioned(ident ~ (ident*) ^^

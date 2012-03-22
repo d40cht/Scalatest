@@ -1,6 +1,6 @@
 package org.seacourt.pacatoon
 
-object TestRunner extends Application
+object TestRunner extends App
 {
     override def main( args : Array[String] ) =
     {
@@ -13,18 +13,20 @@ object TestRunner extends Application
             val str = file.mkString
             file.close()
             val parsed = CalculatorDSL.parse( str )
+            val ssaResolved = NameAliasResolution( parsed )
             if (typeCheck)
             {
                 //DumpAST( parsed )
                 println( "  Checking types" )
-                buTypeAST( parsed )
+                buTypeAST( ssaResolved )
                 println( "    (passed)" )
                 //DumpAST( parsed )
             }
             
+            
             val execContext = new ValueExecutionContext()
             val evaluator = new DynamicASTEvaluator( execContext )
-            evaluator.eval( parsed )
+            evaluator.eval( ssaResolved )
         }
     }
 }

@@ -315,7 +315,7 @@ class Test1 extends FunSuite
         
         assert( q.length === 3 )
         
-        q += 4
+        q = q enqueue 4
         assert( q.length == 4 )
         
         val( element1, newq1 ) = q.dequeue

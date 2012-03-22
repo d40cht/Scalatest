@@ -86,7 +86,7 @@ object ByteCodeGenerator
         
         override def apply( expr : Expression, continue : () => List[ValueReference], rec : Expression => ValueReference ) : ValueReference =
         {
-            if ( expr.exprType == TypeNone ) throw new CodeGenError( expr.pos, "Untyped AST node in codegen: " + expr.getClass.getName )
+            if ( expr.getType == TypeNone ) throw new CodeGenError( expr.pos, "Untyped AST node in codegen: " + expr.getClass.getName )
             
             expr match
             {
@@ -108,7 +108,7 @@ object ByteCodeGenerator
                     }
                 }
                 
-                case IdDefinition( id, params, value : Expression ) =>
+                case NamedIdDefinition( id, params, value : Expression ) =>
                 {
                     if ( params != Nil )
                     {
@@ -127,7 +127,7 @@ object ByteCodeGenerator
                 }
                 
                 case Apply( l, r ) => throw new CodeGenError( expr.pos, "Application not yet supported " )
-                case IdExpression( id ) =>
+                case NamedIdExpression( id ) =>
                 {
                     codeGenerator.idContext.get( expr.pos, id )
                 }

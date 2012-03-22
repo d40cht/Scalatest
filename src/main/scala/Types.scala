@@ -41,6 +41,15 @@ case class TypeVariantClause( val name : String, val elTypes : List[ExprType], v
 case class TypeVariant( val variants : List[TypeVariantClause] ) extends ExprType
 
 
+abstract class Typed
+{
+    private var exprType : ExprType = TypeNone
+    
+    def getType = exprType
+    def setType( newType : ExprType ) { exprType = newType }
+}
+
+
 trait TypeVisitor
 {
     def before( exprType : ExprType ) {}
