@@ -18,7 +18,7 @@ object NameAliasResolution
         
         override def apply( expr : Expression, continue : () => List[Expression], rec : Expression => Expression ) : Expression =
         {
-            expr match
+            val transformedExpr = expr match
             {
                 case NullExpression()                               => expr
                 case ConstantExpression(v)                          => expr
@@ -106,6 +106,8 @@ object NameAliasResolution
                 
                 case _ => NullExpression()
             }
+            transformedExpr.pos = expr.pos
+            transformedExpr
         }
     }
         

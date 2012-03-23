@@ -1,0 +1,14 @@
+@def a = 1.0;
+
+@def f1 :: float -> float;
+@def f1 x =
+{
+    @def b = 8.0;
+    
+    @def f2 :: float -> float;
+    @def f2 y = a * y * b;
+
+    f2 (2.0*x)
+};
+
+assertEqual (f1 2.0) 32.0

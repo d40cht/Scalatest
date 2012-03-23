@@ -14,6 +14,7 @@ object TestRunner extends App
             file.close()
             val parsed = CalculatorDSL.parse( str )
             val ssaResolved = NameAliasResolution( parsed )
+            
             if (typeCheck)
             {
                 //DumpAST( parsed )
@@ -23,10 +24,16 @@ object TestRunner extends App
                 //DumpAST( parsed )
             }
             
+            println( "********** SSA resolved **********" )
+            DumpAST( ssaResolved )
+            val lifted = LiftAllFunctions( ssaResolved )
+            
+            println( "********** Lifted **********" )
+            DumpAST( lifted )
             
             val execContext = new ValueExecutionContext()
             val evaluator = new DynamicASTEvaluator( execContext )
-            evaluator.eval( ssaResolved )
+            evaluator.eval( lifted )
         }
     }
 }
