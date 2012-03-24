@@ -28,6 +28,9 @@ object TestRunner extends App
             //DumpAST( ssaResolved )
             val lifted = LiftAllFunctions( ssaResolved )
             
+            // Lazy: should keep the types updated when transforming AST
+            buTypeAST( lifted )
+            
             println( "********** Lifted **********" )
             DumpAST( lifted )
             
@@ -37,3 +40,5 @@ object TestRunner extends App
         }
     }
 }
+
+

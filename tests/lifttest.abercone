@@ -1,3 +1,6 @@
+
+// Test lifting a couple of nested closure functions (and
+// also the outer fns through which the inners are accessed)
 @def a = 1.0;
 
 @def f1 :: float -> float;
@@ -17,4 +20,26 @@
     f2 (2.0*x)
 };
 
-assertEqual (f1 2.0) 40.0
+assertEqual (f1 2.0) 40.0;
+
+// Test returning a function closure with a local
+// bound variable that escapes scope.
+@def mul :: float -> float -> float;
+@def mul x y = x + y;
+
+@def scaler :: float -> (float -> float);
+@def scaler x =
+{
+    @def _ :: float -> float;
+    @def _ y = x * y;
+    
+    _
+};
+
+@def tripler = scaler 3.0;
+@def doubler = scaler 2.0;
+
+assertEqual (tripler 3.0) 9.0;
+assertEqual (doubler 3.0) 6.0
+
+

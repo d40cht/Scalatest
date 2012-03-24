@@ -170,7 +170,16 @@ object LiftAllFunctions
                     new Apply( tl, tr )
                 }
                 
-                case ExprList( elements )                           => new ExprList( continue() )
+                case ExprList( elements )                           =>
+                {
+                    val res = continue().filter( _ match
+                    {
+                        case NullExpression()   => false
+                        case _                  => true
+                    } )
+                    new ExprList( res )
+                }
+                    
                 case BlockScopeExpression( contents )               =>
                 {
                     val List( transformed ) = continue()

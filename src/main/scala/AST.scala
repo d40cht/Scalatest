@@ -34,11 +34,14 @@ object Identifier
     }
 }
 
-case class Identifier( val name : String ) extends Typed
+abstract class IdentifierBase( val name : String ) extends Typed
 {
     val id = Identifier.nextId
     override def toString = name + "_" + id.toString
 }
+
+case class Identifier( _name : String ) extends IdentifierBase( _name )
+case class FunctionIdentifier( _name : String, params : List[(String, ExprType)] ) extends IdentifierBase( _name )
 
 case class BinOpExpression( left : Expression, right : Expression, opType : BinOpType.Value ) extends Expression
 case class ListAppend( left : Expression, right : Expression ) extends Expression
