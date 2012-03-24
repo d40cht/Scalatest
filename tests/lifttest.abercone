@@ -6,9 +6,15 @@
     @def b = 8.0;
     
     @def f2 :: float -> float;
-    @def f2 y = a * y * b;
+    @def f2 y =
+    {
+        @def f3 :: float -> float;
+        @def f3 z = a * z * b;
+        
+        f3 (y+1.0)
+    };
 
     f2 (2.0*x)
 };
 
-assertEqual (f1 2.0) 32.0
+assertEqual (f1 2.0) 40.0

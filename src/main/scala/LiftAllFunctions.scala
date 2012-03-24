@@ -43,7 +43,7 @@ object LiftAllFunctions
                             val idContext = idFnContext.get(expr.pos, id)
                             
                             // Functions this variable implicitly traverses through into the current closure context
-                            val fnsToUpdate = fnStack.drop( idContext.length )
+                            val fnsToUpdate = fnStack.dropRight( idContext.length )
                             
                             fnsToUpdate.foreach( fId =>
                             {

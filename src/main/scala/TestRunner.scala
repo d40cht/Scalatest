@@ -25,7 +25,7 @@ object TestRunner extends App
             }
             
             println( "********** SSA resolved **********" )
-            DumpAST( ssaResolved )
+            //DumpAST( ssaResolved )
             val lifted = LiftAllFunctions( ssaResolved )
             
             println( "********** Lifted **********" )
