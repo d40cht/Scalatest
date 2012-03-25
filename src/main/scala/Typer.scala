@@ -63,7 +63,18 @@ object buTypeAST
                         }
                     }
                     
-                    case BinOpExpression(l, r, optType)                 => continue(); typeUnion( expr.pos, l.getType, r.getType )
+                    case BinOpExpression(l, r, optType)                 =>
+                    {
+                        import BinOpType._
+                      
+                        continue();
+                        
+                        optType match
+                        {
+                            case (CmpLt | CmpLe | CmpGt | CmpGe | CmpEq | CmpNe)    => TypeBoolean
+                            case _                                                  => typeUnion( expr.pos, l.getType, r.getType )
+                        }
+                    }
                 
                     case BlockScopeExpression( contents )               =>
                     {
@@ -234,7 +245,11 @@ object buTypeAST
                     
                     case ExprList( elements )                           => continue(); elements.last.getType
                     
-                    case IfExpression( cond, trueBranch, falseBranch )  => continue(); typeUnion( expr.pos, trueBranch.getType, falseBranch.getType )
+                    case IfExpression( cond, trueBranch, falseBranch )  => continue();
+                    {
+                        if ( cond.getType != TypeBoolean ) throw new TypeError( expr.pos, "If expression condition must be of boolean type" )
+                        typeUnion( expr.pos, trueBranch.getType, falseBranch.getType )
+                    }
                     
                     case VariantClauseDefinition( name, elementTypeNames )          =>
                     {
