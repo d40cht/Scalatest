@@ -32,7 +32,7 @@ object TestRunner extends App
             buTypeAST( lifted )
             
             println( "********** Lifted **********" )
-            DumpAST( lifted )
+            //DumpAST( lifted )
             
             val execContext = new ValueExecutionContext()
             val evaluator = new DynamicASTEvaluator( execContext )

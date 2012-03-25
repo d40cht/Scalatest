@@ -117,6 +117,10 @@ object LiftAllFunctions
                             // Also lift out of local scope into global scope
                             idRemapStack.push()
                             
+                            // Add in new id in advance to handle recursive functions
+                            val newFnId = new Identifier( id.name )
+                            liftedFunctions += (id -> newFnId)
+                            
                             val toCapture = freeVarMap.getOrElse( id, Nil )
                             val newIds = toCapture.map( oldId =>
                             {
@@ -126,18 +130,19 @@ object LiftAllFunctions
                                 newId
                             } )
                             
+                            
+                            val newParams = newIds ++ params
+                            newFnId.setType( new TypeFunction( newParams.map( _.getType ), retType ) )
+                            
                             val body = rec( value )
                             idRemapStack.pop()
                             
-                            val newParams = newIds ++ params
-                            val newFnId = new Identifier( id.name )
-                            newFnId.setType( new TypeFunction( newParams.map( _.getType ), retType ) )
                             val newFnDefn = new IdDefinition( newFnId, newParams, body )
                             newFnDefn.setPos( expr.pos )
                             
                             allFunctions.append( newFnDefn )
                             
-                            liftedFunctions += (id -> newFnId)
+                            
                             
                             new NullExpression()
                         }
@@ -204,7 +209,7 @@ object LiftAllFunctions
         TransformAST( expr, freeVarAnalyser )
         
         val freeVars = freeVarAnalyser.fnFreeVariables
-        freeVars.foreach( f => println( f._1 + ": " + f._2.map( _.toString ).mkString(", ") ) )
+        //freeVars.foreach( f => println( f._1 + ": " + f._2.map( _.toString ).mkString(", ") ) )
         
         val lifter = new Lifter( freeVars )
         val lifted = TransformAST( expr, lifter )
